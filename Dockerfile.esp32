@@ -1,0 +1,26 @@
+# 采用极简的 Debian Python 底座（ESP-IDF 极其依赖 Python 环境）
+FROM python:3.11-slim
+
+# 1. 安装基础 C 编译工具和底层依赖
+RUN apt-get update && apt-get install -y \
+    git wget flex bison gperf python3-venv \
+    cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt
+
+# 2. 浅克隆 (Shallow Clone) ESP-IDF，只拉取最新稳定版 v5.1.2，绝不拉取庞大的历史记录！
+RUN git clone --depth 1 -b v5.1.2 https://github.com/espressif/esp-idf.git
+
+WORKDIR /opt/esp-idf
+
+# 3. 🔥 核心降维魔法：在安装工具链时，强行指定只安装 esp32 (WROOM-32)！
+# 砍掉 S2/S3/C3 等不需要的架构，节约 2GB 以上空间！
+RUN ./install.sh esp32
+
+# 4. 设置环境变量
+ENV IDF_PATH=/opt/esp-idf
+
+# 5. 挂载工作目录，并在启动时自动激活 ESP-IDF 环境变量
+WORKDIR /project
+ENTRYPOINT ["/bin/bash", "-c", "source /opt/esp-idf/export.sh && exec \"$@\"", "--"]

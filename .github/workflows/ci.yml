@@ -1,0 +1,57 @@
+name: L2C Compiler CI/CD
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+    name: Ubuntu 22.04 / GCC & Clang
+    runs-on: ubuntu-22.04
+
+    steps:
+    - name: 📥 检出代码 (Checkout)
+      uses: actions/checkout@v4
+
+    - name: ⚙️ 安装底层系统依赖 (Lua & C Compilers)
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y lua5.4 liblua5.4-dev luarocks clang gcc make git
+        # 强制将系统的默认 lua 命令指向 lua5.4
+        sudo update-alternatives --install /usr/bin/lua lua /usr/bin/lua5.4 50
+
+    - name: 👁️ 部署 Teal 视网膜环境
+      run: |
+        sudo luarocks install argparse
+        sudo luarocks install tl --nodeps
+        sudo luarocks install inspect
+
+    - name: 🧠 编译部署 Nelua 物理降维引擎
+      run: |
+        git clone https://github.com/edubart/nelua-lang.git /tmp/nelua
+        cd /tmp/nelua
+        make
+        sudo make install
+
+    - name: 🧪 执行 TDD 护城河测试 (Unit & Integration Tests)
+      run: |
+        echo "🚀 启动 L2C 全自动测试总线..."
+        lua test_runner.lua
+
+    - name: 📦 锻造独立二进制本体 (Inception Meta-Compilation)
+      run: |
+        echo "⚡ 执行盗梦空间元编译..."
+        lua build_native_l2c.lua
+        
+        echo "🔍 验证产物物理形态:"
+        file l2c_bin
+        ls -lh l2c_bin | awk '{print "📦 物理体积: " $5}'
+
+    - name: 📤 发布 L2C 编译器发行版 (Artifact)
+      uses: actions/upload-artifact@v4
+      with:
+        name: l2c_bin_linux_amd64
+        path: l2c_bin
+        retention-days: 7

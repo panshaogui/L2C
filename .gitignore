@@ -1,0 +1,31 @@
+# Compiled binaries
+native_app
+l2c_bin
+*_test
+*_engine
+*.exe
+bin/
+apply_license.sh
+
+# Nelua / C Intermediate files
+.l2c_temp_*.nelua
+.l2c_error_dump.tl
+*.o
+*.c
+!clib/*.cpp
+!clib/*.h
+nelua-lang/
+
+# ESP-IDF / Pico Build Folders
+build/
+esp32_forge/build/
+esp32_forge/managed_components/
+
+# Databases & Logs
+*.db
+*.log
+*.sqlite
+
+# OS generated files
+.DS_Store
+__MACOSX/

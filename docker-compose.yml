@@ -1,0 +1,34 @@
+services:
+  l2c-compiler:
+    container_name: l2c-musl-forge
+    #  1. 告诉 Compose 怎么在本地锻造这个炼丹炉
+    build:
+      context: .
+      dockerfile: Dockerfile.musl
+    image: l2c-musl-forge:v1
+    
+    #  2. 物理挂载：把 Mac/Linux 本地的项目目录映射到容器的 /workspace
+    volumes:
+      - .:/workspace
+      
+    #  3. 环境变量注入
+    environment:
+      - L2C_MUSL_FORGE=1
+      
+    #  4. 保持容器后台运行不退出（因为 ENTRYPOINT 是开机即执行），方便我们随时调用
+    entrypoint: /bin/sh
+    tty: true
+    stdin_open: true
+
+#  咱们新筑的 Pico / FreeRTOS 交叉编译炉！
+  l2c-pico-forge:
+    container_name: l2c-pico-forge
+    build:
+      context: .
+      dockerfile: Dockerfile.pico
+    image: l2c-pico-forge:v1
+    volumes:
+      - .:/workspace
+    entrypoint: /bin/sh
+    tty: true
+    stdin_open: true

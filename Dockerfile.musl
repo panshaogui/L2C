@@ -1,0 +1,29 @@
+# Dockerfile.musl
+FROM alpine:edge
+
+# 安装底层的 C/C++ 编译器与 Lua 基础环境
+# 💡 优化：移除了末尾不存在的 zeromq-static 和 sqlite-static（静态库已默认包含在 -dev 中）
+RUN apk update && apk add --no-cache \
+    lua5.4 lua5.4-dev luarocks \
+    gcc g++ clang lld make git linux-headers \
+    zeromq-dev nanomsg-dev sqlite-dev libuv-dev simdjson-dev \
+    libzmq-static sqlite-static libsodium-static libc++-static \
+    cjson-static cjson-dev
+
+# 软链 Lua
+RUN ln -sf /usr/bin/lua5.4 /usr/bin/lua
+
+# 部署 Teal 视网膜环境
+RUN luarocks-5.4 install argparse && \
+    luarocks-5.4 install tl --nodeps && \
+    luarocks-5.4 install inspect
+
+# 源码编译 Nelua
+RUN git clone https://github.com/edubart/nelua-lang.git /opt/nelua && \
+    cd /opt/nelua && make && make install
+
+# 🔥 核心：注入 L2C_MUSL_FORGE 标识，激活咱们刚写的跨平台雷达！
+ENV L2C_MUSL_FORGE=1
+
+WORKDIR /workspace
+ENTRYPOINT ["lua", "l2c.lua"]
