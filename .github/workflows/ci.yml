@@ -5,29 +5,45 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
+  # 🔥 [新增发版雷达]：监听打标签的动作 (如 git tag v1.0.0)
+  push:
+    tags:
+      - 'v*.*.*'
 
 jobs:
-  build-and-test:
-    name: Ubuntu 22.04 / GCC & Clang
-    runs-on: ubuntu-22.04
+  # ==========================================
+  # 🏭 阶段一：全平台矩阵并发编译 (Matrix Build)
+  # ==========================================
+  build:
+    name: Build on ${{ matrix.os }}
+    # 🎯 开启矩阵分发：同时拉起 Linux(X64) 和 macOS(Apple Silicon ARM64)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-22.04, macos-14]
 
     steps:
     - name: 📥 检出代码 (Checkout)
       uses: actions/checkout@v4
 
-    - name: ⚙️ 安装底层系统依赖 (Lua & C Compilers)
+    - name: ⚙️ 安装底层依赖 (Linux 分支)
+      if: runner.os == 'Linux'
       run: |
         sudo apt-get update
         sudo apt-get install -y lua5.4 liblua5.4-dev luarocks clang gcc make git
-        # 🔥 [物理降维打击]：不和 Ubuntu 的包管理器废话，直接用强制软链接劫持全局 lua 命令！
         sudo ln -sf /usr/bin/lua5.4 /usr/bin/lua
-
-    - name: 👁️ 部署 Teal 视网膜环境
-      run: |
-        # 🔥 [强制对齐]：绝不允许 Ubuntu 偷偷安装到 5.1 目录！强制指定 5.4！
         sudo luarocks --lua-version=5.4 install argparse
         sudo luarocks --lua-version=5.4 install tl --nodeps
         sudo luarocks --lua-version=5.4 install inspect
+
+    - name: ⚙️ 安装底层依赖 (macOS 分支)
+      if: runner.os == 'macOS'
+      run: |
+        brew update
+        brew install lua luarocks
+        luarocks --lua-version=5.4 install argparse
+        luarocks --lua-version=5.4 install tl --nodeps
+        luarocks --lua-version=5.4 install inspect
 
     - name: 🧠 编译部署 Nelua 物理降维引擎
       run: |
@@ -36,23 +52,45 @@ jobs:
         make
         sudo make install
 
-    - name: 🧪 执行 TDD 护城河测试 (Unit & Integration Tests)
+    - name: 🧪 执行 TDD 护城河测试 (全平台并发测试)
       run: |
         echo "🚀 启动 L2C 全自动测试总线..."
         lua test_runner.lua
 
-    - name: 📦 锻造独立二进制本体 (Inception Meta-Compilation)
+    - name: 📦 锻造独立二进制本体 (重命名防冲突)
       run: |
         echo "⚡ 执行盗梦空间元编译..."
         lua build_native_l2c.lua
-        
-        echo "🔍 验证产物物理形态:"
-        file l2c_bin
-        ls -lh l2c_bin | awk '{print "📦 物理体积: " $5}'
+        # 物理重命名：区分平台与架构，例如 l2c_bin_Linux_X64
+        mv l2c_bin l2c_bin_${{ runner.os }}_${{ runner.arch }}
 
-    - name: 📤 发布 L2C 编译器发行版 (Artifact)
+    - name: 📤 临时存储 Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: l2c_bin_linux_amd64
-        path: l2c_bin
-        retention-days: 7
+        name: l2c-compiler-${{ runner.os }}-${{ runner.arch }}
+        path: l2c_bin_${{ runner.os }}_${{ runner.arch }}
+        retention-days: 1
+
+  # ==========================================
+  # 🚀 阶段二：终极自动发版 (Release)
+  # ==========================================
+  release:
+    name: 🌐 自动推送到 GitHub Releases
+    needs: build
+    # 🛡️ 只有当你打了形如 v1.0.0 的 tag 时，才会触发这个发版车间
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - name: 📥 下载所有平台的编译产物
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+        merge-multiple: true
+
+    - name: 📢 创建 Release 页面并挂载二进制武器
+      uses: softprops/action-gh-release@v2
+      with:
+        files: artifacts/l2c_bin_*
+        generate_release_notes: true
