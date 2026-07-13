@@ -48,6 +48,19 @@ L2C comes with an expanding array of 0-GC FFI wrappers for the world's most powe
 
 ---
 
+## 🛠️ Ecosystem & Standard Library (L2C-STD)
+
+L2C comes with an expanding array of 0-GC FFI wrappers for the world's most powerful C/C++ libraries, featuring the **"Invisible Debt Registry"** to automatically handle linker flags (`-lc++`, `-lsodium`, etc.):
+
+*   🌐 **`std/zmq.tl`**: Microsecond-latency network gateways (ZeroMQ).
+*   🚀 **`std/nanomsg.tl`**: Nanosecond-latency IPC shared memory bus.
+*   💾 **`std/sqlite.tl`**: 0-allocation SQL transaction logging.
+*   ⚡ **`std/simdjson.tl`**: AVX-512/SSE4.2 accelerated JSON parsing via C++ wrappers.
+*   ⏱️ **`std/uv.tl`**: C10K async event loops (libuv).
+*   🔌 **`std/pico.tl` & `std/freertos.tl`**: Bare-metal RTOS task scheduling for RP2040 (Raspberry Pi Pico) and ESP32.
+
+---
+
 ## 🚀 Quick Start
 
 ### 1. Build the Compiler (Self-Contained Binary)
@@ -55,8 +68,11 @@ Using our inception-style meta-compiler, generate a standalone `l2c_bin` that em
 ```bash
 lua build_native_l2c.lua
 # Yields a ~700KB standalone 'l2c_bin' executable
+```
 
-### 2. Write your HFT Strategy (strategy.tl)
+---
+
+### 2. Write your HFT Strategy (`strategy.tl`)
 ```lua
 -- @l2c_import: std/zmq.tl
 -- @l2c_import: std/cjson.tl
@@ -76,19 +92,29 @@ local function on_tick()
     -- O(1) Memory Pool Reset to prevent OOM
     L2C_Tick_Reset()
 end
+```
+
+---
 
 ### 3. Compile to Native / Musl Linux / MCU Firmware
+> **Note for Windows Users**: Native Windows build is intentionally unsupported to maintain extreme 0-GC POSIX performance. Please use **WSL2 (Ubuntu)**.
+
 ```bash
 # Host Machine (macOS/Linux)
 ./l2c_bin strategy.tl -o hft_bot
 
 # Alpine/Musl Linux (Fully Statically Linked ELF)
-./build_musl.sh examples/strategy.tl -o linux_bot
+./build_linux.sh examples/strategy.tl -o linux_bot
 
 # RP2040 / ESP32 Microcontrollers
 ./l2c_bin firmware.tl -o main --target=pico --emit-c
+```
 
-# Contributing
-This is a community-driven subset. Found a missing AST node that fits our 0-GC philosophy? PRs are highly welcome. Just add your gen_xxx in codegen/ and provide a test case in tests/unit/.
-For any feature request requiring a Garbage Collector: Won't fix. Closed.
-Copyright (c) 2026 [Panshaogui] | MIT License
+---
+
+## 🤝 Contributing
+This is a community-driven subset. Found a missing AST node that fits our 0-GC philosophy? PRs are highly welcome. Just add your `gen_xxx` in `codegen/` and provide a test case in `tests/unit/`.
+
+**For any feature request requiring a Garbage Collector: Won't fix. Closed.**
+
+> *Copyright (c) 2026 Panshaogui | MIT License*
