@@ -3,12 +3,11 @@ name: L2C Compiler CI/CD
 on:
   push:
     branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-  # 🔥 [新增发版雷达]：监听打标签的动作 (如 git tag v1.0.0)
-  push:
+    # 🔥 合并到同一个 push 键下，监听标签
     tags:
       - 'v*.*.*'
+  pull_request:
+    branches: [ "main" ]
 
 jobs:
   # ==========================================
