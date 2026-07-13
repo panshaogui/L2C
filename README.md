@@ -48,19 +48,6 @@ L2C comes with an expanding array of 0-GC FFI wrappers for the world's most powe
 
 ---
 
-## 🛠️ Ecosystem & Standard Library (L2C-STD)
-
-L2C comes with an expanding array of 0-GC FFI wrappers for the world's most powerful C/C++ libraries, featuring the **"Invisible Debt Registry"** to automatically handle linker flags (`-lc++`, `-lsodium`, etc.):
-
-*   🌐 **`std/zmq.tl`**: Microsecond-latency network gateways (ZeroMQ).
-*   🚀 **`std/nanomsg.tl`**: Nanosecond-latency IPC shared memory bus.
-*   💾 **`std/sqlite.tl`**: 0-allocation SQL transaction logging.
-*   ⚡ **`std/simdjson.tl`**: AVX-512/SSE4.2 accelerated JSON parsing via C++ wrappers.
-*   ⏱️ **`std/uv.tl`**: C10K async event loops (libuv).
-*   🔌 **`std/pico.tl` & `std/freertos.tl`**: Bare-metal RTOS task scheduling for RP2040 (Raspberry Pi Pico) and ESP32.
-
----
-
 ## 🚀 Quick Start
 
 ### 1. Build the Compiler (Self-Contained Binary)
@@ -96,18 +83,37 @@ end
 
 ---
 
-### 3. Compile to Native / Musl Linux / MCU Firmware
+### 3. Compile to Host OS / Cloud Servers
 > **Note for Windows Users**: Native Windows build is intentionally unsupported to maintain extreme 0-GC POSIX performance. Please use **WSL2 (Ubuntu)**.
 
 ```bash
-# Host Machine (macOS/Linux)
+# Host Machine (macOS/Linux Native)
 ./l2c_bin strategy.tl -o hft_bot
 
 # Alpine/Musl Linux (Fully Statically Linked ELF)
-./build_linux.sh examples/strategy.tl -o linux_bot
+./build_musl.sh examples/strategy.tl -o linux_bot
+```
 
-# RP2040 / ESP32 Microcontrollers
-./l2c_bin firmware.tl -o main --target=pico --emit-c
+---
+
+### 4. Cross-Compile to Edge IoT (Pico / ESP32 Firmware)
+L2C uses Docker-based "Forges" to completely eliminate the pain of configuring MCU toolchains (ARM GCC, Pico SDK, ESP-IDF, FreeRTOS).
+
+```bash
+# Step 1: Emit raw, 0-GC C-code from your Teal logic
+./l2c_bin examples/19_pico_blinky.tl -o main --target=pico --emit-c
+
+# Step 2: Spin up the cross-compilation Forge in the background
+docker compose up -d l2c-pico-forge
+
+# Step 3: Dive into the container and melt the silicon
+docker compose exec l2c-pico-forge /bin/sh
+
+/workspace # mkdir build && cd build
+/workspace/build # cmake ..
+/workspace/build # make -j4
+
+# Output: firmware.uf2 is generated and ready to flash!
 ```
 
 ---
