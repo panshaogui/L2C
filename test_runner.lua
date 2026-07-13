@@ -76,6 +76,12 @@ local function run_tests()
     print("========================================")
     print(string.format("🏆 测试完成 | 通过: %d | 失败: %d", passed, failed))
     print("========================================")
+    
+    -- 🔥 [护城河闸刀]：如果有任何测试失败，向操作系统返回失败状态码 (1)，强行掐断 CI/CD 流水线！
+    if failed > 0 then
+        os.exit(1)
+    end
+
 end
 
 run_tests()
