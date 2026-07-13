@@ -40,9 +40,10 @@ jobs:
       run: |
         brew update
         brew install lua luarocks
-        luarocks --lua-version=5.4 install argparse
-        luarocks --lua-version=5.4 install tl --nodeps
-        luarocks --lua-version=5.4 install inspect
+        # 🔥 [精准解绑]：Mac 的 Homebrew 默认就是 5.4，去掉画蛇添足的版本限制！
+        luarocks install argparse
+        luarocks install tl --nodeps
+        luarocks install inspect
 
     - name: 🧠 编译部署 Nelua 物理降维引擎
       run: |
