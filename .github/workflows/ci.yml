@@ -19,8 +19,8 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y lua5.4 liblua5.4-dev luarocks clang gcc make git
-        # 强制将系统的默认 lua 命令指向 lua5.4
-        sudo update-alternatives --install /usr/bin/lua lua /usr/bin/lua5.4 50
+        # 🔥 [物理降维打击]：不和 Ubuntu 的包管理器废话，直接用强制软链接劫持全局 lua 命令！
+        sudo ln -sf /usr/bin/lua5.4 /usr/bin/lua
 
     - name: 👁️ 部署 Teal 视网膜环境
       run: |
