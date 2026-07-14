@@ -27,7 +27,7 @@ function M.bundle(input_file)
     end
 
     local bundled_code = read_and_bundle(input_file)
-    local l2c_core_headers = "-- L2C Core Intrinsics\nlocal function L2C_Buffer(size: integer): any end\nlocal function L2C_NumberArray(size: integer): {number} end\nlocal function L2C_IntegerArray(size: integer): {integer} end\nlocal function L2C_Ref(var: any): any end\nlocal function L2C_Cast(ptr: any, tname: string): any end\nlocal function L2C_FuncPtr(func: any): any end\nlocal function L2C_NewPointer(): any end\n\n"
+    local l2c_core_headers = "-- L2C Core Intrinsics\nlocal function L2C_Buffer(size: integer): any end\nlocal function L2C_NumberArray(size: integer): {number} end\nlocal function L2C_IntegerArray(size: integer): {integer} end\nlocal function L2C_Ref(var: any): any end\nlocal function L2C_Cast(ptr: any, tname: string): any end\nlocal function L2C_FuncPtr(func: any): any end\nlocal function L2C_NewPointer(): any end\nlocal function L2C_Tick_Reset() end\n\n"
     bundled_code = l2c_core_headers .. bundled_code
 
     local deps = { ldflags = "", cincludes = "", cpp_sources = {} }

@@ -12,7 +12,7 @@ local type cJSON_ptr = record end
 
 -- 2. 挂载原生 C 函数 (严格对齐 C 标准头文件)
 local type C_CJSON = record
-    cJSON_Parse: function(string): cJSON_ptr
+    cJSON_Parse: function(any): cJSON_ptr
     cJSON_GetObjectItemCaseSensitive: function(cJSON_ptr, string): cJSON_ptr
     cJSON_IsNumber: function(cJSON_ptr): integer
     cJSON_IsString: function(cJSON_ptr): integer
@@ -22,7 +22,7 @@ local type C_CJSON = record
 end
 
 -- 3. 极简封装，抛出给高层业务使用
-local function cjson_parse(json_str: string): cJSON_ptr
+local function cjson_parse(json_str: any): cJSON_ptr
     return C_CJSON.cJSON_Parse(json_str)
 end
 
