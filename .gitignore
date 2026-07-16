@@ -14,6 +14,7 @@ apply_license.sh
 *.c
 !clib/*.cpp
 !clib/*.h
+!clib/*.c
 nelua-lang/
 
 # ESP-IDF / Pico Build Folders
