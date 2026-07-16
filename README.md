@@ -53,7 +53,12 @@ L2C comes with an expanding array of 0-GC FFI wrappers for the world's most powe
 ### 1. Build the Compiler (Self-Contained Binary)
 Using our inception-style meta-compiler, generate a standalone `l2c_bin` that embeds the Lua VM and AST parser:
 ```bash
+docker compose up -d  l2c-compiler
+
+docker compose exec l2c-compiler /bin/sh
+
 lua build_native_l2c.lua
+
 # Yields a ~700KB standalone 'l2c_bin' executable
 ```
 
@@ -114,9 +119,9 @@ docker compose up -d l2c-pico-forge
 # Step 3: Dive into the container and melt the silicon
 docker compose exec l2c-pico-forge /bin/sh
 
-/workspace # mkdir build && cd build
-/workspace/build # cmake ..
-/workspace/build # make -j4
+mkdir build && cd build
+cmake ..
+make -j4
 
 # Output: firmware.uf2 is generated and ready to flash!
 ```

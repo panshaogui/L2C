@@ -7,7 +7,7 @@ print("🚀 L2C 0-GC JSON 解析引擎启动...")
 local mock_binance_msg = '{"symbol": "BTCUSDT", "price": 64500.50, "qty": 1.5}'
 
 -- 1. 物理层解析 (直接在 C 内存堆里构建 DOM 树，Lua 侧毫无 GC 感知)
-local root = cjson_parse(mock_binance_msg)
+local root = cjson_parse(L2C_Cast(mock_binance_msg, "cstring"))
 
 if root ~= nil then
     -- 2. 极速提取数据
