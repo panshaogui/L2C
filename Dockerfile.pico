@@ -12,11 +12,11 @@ RUN apk update && \
     newlib-arm-none-eabi linux-headers
 
 # =========================================================================
-#  2. 部署基础依赖：Pico SDK
+# 📦 2. 部署基础依赖：Pico SDK
 # =========================================================================
 WORKDIR /opt
-RUN git clone --depth=1 -b master https://github.com/raspberrypi/pico-sdk.git && \
-    cd pico-sdk
+# 🔥 核心修复：Pico SDK 严重依赖 tinyusb 等子模块！必须递归浅克隆！
+RUN git clone --depth=1 -b master --recursive --shallow-submodules https://github.com/raspberrypi/pico-sdk.git /opt/pico-sdk
 
 # 注入 Pico SDK 绝对路径到系统全局变量，供 CMake 自动识别
 ENV PICO_SDK_PATH=/opt/pico-sdk
@@ -24,14 +24,13 @@ ENV PICO_SDK_PATH=/opt/pico-sdk
 # =========================================================================
 # ⚙️ 3. 部署内核依赖：FreeRTOS 内核
 # =========================================================================
-RUN git clone --depth=1 -b main https://github.com/FreeRTOS/FreeRTOS-Kernel.git /opt/freertos
+RUN git clone --depth=1 -b main --recursive --shallow-submodules https://github.com/FreeRTOS/FreeRTOS-Kernel.git /opt/freertos
 
 # 注入 FreeRTOS 绝对路径到系统全局变量
 ENV FREERTOS_KERNEL_PATH=/opt/freertos
 
 # =========================================================================
-#  4. 挂载工作目录与执行入口
+# 🏁 4. 挂载工作目录与执行入口
 # =========================================================================
 WORKDIR /workspace
-# 默认进入终端，方便咱们一会儿调试 CMake 编译流程
 CMD ["/bin/sh"]

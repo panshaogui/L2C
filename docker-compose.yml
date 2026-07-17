@@ -1,32 +1,20 @@
 services:
+  # 🚀 1. 静态原生编译炼丹炉 (Musl)
   l2c-compiler:
     container_name: l2c-musl-forge
-    #  1. 告诉 Compose 怎么在本地锻造这个炼丹炉
-    build:
-      context: .
-      dockerfile: Dockerfile.musl
-    image: l2c-musl-forge:v1
-    
-    #  2. 物理挂载：把 Mac/Linux 本地的项目目录映射到容器的 /workspace
+    image: ghcr.io/panshaogui/l2c-musl-env:latest
     volumes:
       - .:/workspace
-      
-    #  3. 环境变量注入
     environment:
       - L2C_MUSL_FORGE=1
-      
-    #  4. 保持容器后台运行不退出（因为 ENTRYPOINT 是开机即执行），方便我们随时调用
     entrypoint: /bin/sh
     tty: true
     stdin_open: true
 
-#  咱们新筑的 Pico / FreeRTOS 交叉编译炉！
+  # 🚀 2. 树莓派 Pico 交叉编译炼丹炉
   l2c-pico-forge:
     container_name: l2c-pico-forge
-    build:
-      context: .
-      dockerfile: Dockerfile.pico
-    image: l2c-pico-forge:v1
+    image: ghcr.io/panshaogui/l2c-pico-env:latest
     volumes:
       - .:/workspace
     entrypoint: /bin/sh
@@ -35,7 +23,6 @@ services:
 
   l2c-esp32-forge:
     container_name: l2c-esp32-forge
-    # ⚠️ 必须修改：把 YOUR_GITHUB_USERNAME 替换成您的真实 GitHub 用户名 (全小写)
     image: ghcr.io/panshaogui/l2c-esp32-env:latest
     
     # 物理挂载：把当前代码库直连进容器
