@@ -18,6 +18,10 @@ function M.execute(tmp_file, output_bin)
         -- 顺便自动补齐 argc 和 argv 防止内部变量报错！
         c_src = c_src:gsub("int main%(int argc, char%*%* argv%) %{", "void app_main(void) {\n  int argc = 0;\n  char** argv = (char**)0;\n")
         
+        -- 3. 🔪 刮骨疗毒：抹掉 app_main 内部不合规的 return 返回值！
+        -- 把 "return nelua_main(argc, argv);" 强行扭曲为 "nelua_main(argc, argv);"
+        c_src = c_src:gsub("return%s+nelua_main%(argc,%s*argv%);", "nelua_main(argc, argv);")
+        
         local fw = io.open(out_c_file, "w")
         fw:write(c_src) fw:close()
         print("✅ [L2C] ESP32 固件源码生成完毕！: ./" .. out_c_file)

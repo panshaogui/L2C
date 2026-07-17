@@ -111,11 +111,7 @@ L2C uses Docker-based "Forges" to completely eliminate the pain of configuring M
 
 ```bash
 # Step 1: Emit raw, 0-GC C-code from your Teal logic
-docker compose up -d  l2c-compiler
-
-docker compose exec l2c-compiler /bin/sh
-
-./l2c_bin examples/20_pico_sniper.tl -o main --target=pico --emit-c
+./build_musl.sh  examples/20_pico_sniper.tl -o main --target=pico --emit-c
 
 # Step 2: Spin up the cross-compilation Forge in the background
 docker compose up -d l2c-pico-forge

@@ -9,7 +9,7 @@ RUN apk update && \
     git cmake make python3 build-base \
     gcc-arm-none-eabi \
     g++-arm-none-eabi \
-    newlib-arm-none-eabi
+    newlib-arm-none-eabi linux-headers
 
 # =========================================================================
 #  2. 部署基础依赖：Pico SDK

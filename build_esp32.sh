@@ -16,6 +16,6 @@ fi
 
 docker run --rm \
     -v "$(pwd)/esp32_forge":/project \
-    "$IMAGE_NAME" /bin/bash -c "idf.py build"
+    "$IMAGE_NAME" idf.py build
 
 echo "✅ 编译完成！固件位于 esp32_forge/build/ 目录下！"
