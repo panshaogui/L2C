@@ -1,0 +1,50 @@
+name: Build ESP32 L2C Environment
+
+# 触发条件：手动触发，或者修改了 Dockerfile.esp32 时自动触发
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'Dockerfile.esp32'
+    branches:
+      - main
+      - master
+
+env:
+  # 设置推送到 GitHub 容器镜像中心
+  REGISTRY: ghcr.io
+  # 镜像名称转为小写 (GitHub 强制要求小写)
+  IMAGE_NAME: ${{ github.repository_owner }}/l2c-esp32-env
+
+jobs:
+  build-and-push-image:
+    runs-on: ubuntu-latest
+    
+    # 赋予推送到 GHCR 的权限
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.esp32
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

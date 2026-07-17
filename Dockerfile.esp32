@@ -10,11 +10,11 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /opt
 
 # 2. 浅克隆 (Shallow Clone) ESP-IDF，只拉取最新稳定版 v5.1.2，绝不拉取庞大的历史记录！
-RUN git clone --depth 1 -b v5.1.2 https://github.com/espressif/esp-idf.git
+RUN git clone --depth 1 -b v5.1.2 --recursive --shallow-submodules https://github.com/espressif/esp-idf.git
 
 WORKDIR /opt/esp-idf
 
-# 3. 🔥 核心降维魔法：在安装工具链时，强行指定只安装 esp32 (WROOM-32)！
+# 3. 核心降维魔法：在安装工具链时，强行指定只安装 esp32 (WROOM-32)！
 # 砍掉 S2/S3/C3 等不需要的架构，节约 2GB 以上空间！
 RUN ./install.sh esp32
 

@@ -1,3 +1,8 @@
+// ==============================================================================
+// Copyright (c) 2026 Panshaogui | MIT License
+// L2C: Transpile Typed Lua into 0-GC Native C for HFT and Embedded Systems.
+// ==============================================================================
+
 #ifndef XDP_PARSER_H
 #define XDP_PARSER_H
 

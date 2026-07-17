@@ -1,3 +1,8 @@
+-- ==============================================================================
+-- Copyright (c) 2026 Panshaogui | MIT License
+-- L2C: Transpile Typed Lua into 0-GC Native C for HFT and Embedded Systems.
+-- ==============================================================================
+
 -- std/xdp.tl
 -- @l2c_link: bpf
 -- @l2c_link: xdp
