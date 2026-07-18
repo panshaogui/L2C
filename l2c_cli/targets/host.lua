@@ -39,7 +39,7 @@ function M.execute(tmp_file, output_bin, deps)
                 local debt = bundler.STD_DEBT[std_key]
                 if debt then
                     local resolved_ldflags = debt.ldflags
-		    -- 🔥 [平台感知与智能换汇]：解决 C++ 标准库碎片化惨案！
+		            -- [平台感知与智能换汇]：解决 C++ 标准库碎片化惨案！
                     if is_musl then
                         -- Alpine Linux/GNU 环境下，将 LLVM 的 libc++ 智能转换为 GNU 的 libstdc++
                         resolved_ldflags = resolved_ldflags:gsub("%-lc%+%+", "-lstdc++")

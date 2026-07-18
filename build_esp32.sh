@@ -10,7 +10,7 @@ rm -f "$(pwd)/esp32_forge/CMakeCache.txt"
 
 # 2. 检查极速炼丹炉是否存在
 if ! docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
-    echo "⚠️ 正在为您自动构建 ESP32 极速炼丹炉 (仅包含核心工具链)..."
+    echo "正在为您自动构建 ESP32 极速炼丹炉 (仅包含核心工具链)..."
     docker pull "$IMAGE_NAME"
 fi
 
