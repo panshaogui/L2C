@@ -39,6 +39,22 @@ function M:gen_op(node)
             return "(@pointer)(" .. self:gen(node.e2[1]) .. ")"
         end
 
+        -- 🔥 [C FFI 内存宏]：静态持久化内存分配 (L2C_Static)
+        if func_node.kind == "variable" and func_node.tk == "L2C_Static" then
+            local type_node = node.e2[1]
+            -- 兼容传入字符或者直接传入类型名
+            local type_name = type_node.value or type_node.tk or "any"
+            if type_name:match('^".*"$') or type_name:match("^'.*'$") then
+                type_name = type_name:sub(2, -2)
+            end
+            
+            -- 在 Nelua 中使用 <static> 注解，强制将其放在 C 语言的 .bss 数据段！
+            return string.format([[(do
+                local o_static: %s <static>
+                in &o_static
+                end)]], type_name)
+        end
+
         -- 🔥 [C FFI 内存宏]：零拷贝强转（Zero-Copy Cast 优雅 OOP 版）
         if func_node.kind == "op" and func_node.op.op == "." and func_node.e2.tk == "_cast" then
             local type_name = func_node.e1.tk
@@ -86,10 +102,10 @@ function M:gen_op(node)
             local body_str = table.concat(kv_pairs, "\n  ")
             
             return string.format([[(do
-  local o_ptr = (&my_arena):new(@%s)
-  %s
-  in o_ptr
-end)]], type_name, body_str)
+                local o_ptr = (&my_arena):new(@%s)
+                %s
+                in o_ptr
+                end)]], type_name, body_str)
         end
 
         -- 普通函数调用兜底
