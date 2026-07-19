@@ -2,12 +2,14 @@ name: L2C Compiler CI/CD
 
 on:
   push:
-    branches: [ "main" ]
-    # 🔥 合并到同一个 push 键下，监听标签
+    branches:
+      - main
+      - feature/*
     tags:
       - 'v*.*.*'
   pull_request:
-    branches: [ "main" ]
+    branches:
+      - main
 
 jobs:
   # ==========================================

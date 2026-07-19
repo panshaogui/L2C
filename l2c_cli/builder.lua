@@ -21,11 +21,32 @@ function M.build_nelua(bundled_code, deps, input_file)
 
     local engine = Codegen.new()
     local nelua_code = engine:gen(result.ast)
-    local final_code = "## pragma { gc = 'none' }\n" .. deps.cincludes .. "require 'allocators.arena'\nglobal my_arena: ArenaAllocator(10 * 1024 * 1024)\n\n" .. nelua_code
+    
+    -- 📡 核心降维魔法：靶向智能伸缩！嗅探代码，看菜下饭！
+    local arena_size = "10 * 1024 * 1024" -- 默认 PC/高频环境，分配 10MB
+    
+    if bundled_code:match("std/pico%.tl") then
+        arena_size = "32 * 1024"  -- 树莓派 Pico 极度贫穷，只给 32KB
+        print("⚙️  [L2C 内存雷达] 嗅探到 Pico 靶向，Arena 智能缩容至 32 KB！")
+    elseif bundled_code:match("std/esp32%.tl") or bundled_code:match("std/freertos%.tl") then
+        arena_size = "64 * 1024"  -- ESP32 稍微富裕，给 64KB
+        print("⚙️  [L2C 内存雷达] 嗅探到 ESP32/FreeRTOS 靶向，Arena 智能缩容至 64 KB！")
+    end
+
+    -- 将动态缩容后的大小注入到底层模板
+    local final_code = string.format([[
+        ## pragma { gc = 'none' }
+        %s
+        require 'allocators.arena'
+        global my_arena: ArenaAllocator(%s)
+
+        %s
+        ]], deps.cincludes, arena_size, nelua_code)
 
     local tmp_file = ".l2c_temp_" .. os.time() .. ".nelua"
     local f_out = io.open(tmp_file, "w")
     f_out:write(final_code) f_out:close()
     return tmp_file
 end
+
 return M
