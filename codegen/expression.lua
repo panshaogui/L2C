@@ -13,8 +13,15 @@ function M:gen_op(node)
     if op_sym == "@funcall" then
         local func_node = node.e1
         
+        --[[
         if func_node.kind == "variable" and func_node.tk == "L2C_Tick_Reset" then
             return "my_arena:deallocall()"
+        end
+        --]]
+
+        -- 🔥 [硬核手术一：多核内存熔断机制]
+        if func_node.kind == "variable" and func_node.tk == "L2C_Tick_Reset" then
+            return "L2C_Get_Arena():deallocall()"
         end
 
         -- 🔥 [C FFI 内存宏]：取地址符（对应 C 语言的 &指针传入）
@@ -62,13 +69,17 @@ function M:gen_op(node)
             -- Nelua 原生纯 C 物理指针强转语法：(@*Type)(ptr)
             return string.format("(@*%s)(%s)", type_name, ptr_exp)
         end
-            
-        -- 🔥 [硬核手术一：内存熔断机制]
-        -- 一旦在策略里调用了 L2C_Tick_Reset()，底层直接翻译为 10MB 内存池瞬时清空！
-        if func_node.kind == "variable" and func_node.tk == "L2C_Tick_Reset" then
-	    -- 修复：Nelua 的 arena 释放全部内存的方法叫 deallocall
-            return "my_arena:deallocall()"
+
+        --[[ 🛡️ [前提二：物理级自旋锁 API 映射]
+
+        if func_node.kind == "variable" and func_node.tk == "L2C_Spinlock_Lock" then
+            return "L2C_SPINLOCK_LOCK(" .. self:gen(node.e2[1]) .. ")"
         end
+        if func_node.kind == "variable" and func_node.tk == "L2C_Spinlock_Unlock" then
+            return "L2C_SPINLOCK_UNLOCK(" .. self:gen(node.e2[1]) .. ")"
+        end
+
+        --]]
 
         -- 🔥 [硬核手术二：防御性内联展开]
         if func_node.kind == "op" and func_node.op.op == "." and func_node.e2.tk == "_new" then
@@ -101,8 +112,9 @@ function M:gen_op(node)
             end
             local body_str = table.concat(kv_pairs, "\n  ")
             
+            -- 使用内联路由函数进行物理指针展开
             return string.format([[(do
-                local o_ptr = (&my_arena):new(@%s)
+                local o_ptr = L2C_Get_Arena():new(@%s)
                 %s
                 in o_ptr
                 end)]], type_name, body_str)
