@@ -30,3 +30,4 @@ esp32_forge/managed_components/
 # OS generated files
 .DS_Store
 __MACOSX/
+native_app.dSYM/

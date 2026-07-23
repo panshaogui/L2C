@@ -61,6 +61,10 @@ function M:gen_while(node)
     return table.concat(out, "\n")
 end
 
+function M:gen_break(node)
+    return "break"
+end
+
 -- ------------------------------------------
 -- 🔄 映射 5：循环生成器 (For-Loop 完美版)
 -- ------------------------------------------
