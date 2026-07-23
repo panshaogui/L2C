@@ -7,29 +7,23 @@ local M = {}
 
 function M:gen_op(node)
     local op_sym = node.op.op
-    -- 🔥 [语法兼容]：强制抹平 Teal 和 Nelua 对“不等于”符号的解析差异
+    --  [语法兼容]：强制抹平 Teal 和 Nelua 对“不等于”符号的解析差异
     if op_sym == "!=" then op_sym = "~=" end
 
     if op_sym == "@funcall" then
         local func_node = node.e1
-        
-        --[[
-        if func_node.kind == "variable" and func_node.tk == "L2C_Tick_Reset" then
-            return "my_arena:deallocall()"
-        end
-        --]]
 
-        -- 🔥 [硬核手术一：多核内存熔断机制]
+        --  [硬核手术一：多核内存熔断机制]
         if func_node.kind == "variable" and func_node.tk == "L2C_Tick_Reset" then
             return "L2C_Get_Arena():deallocall()"
         end
 
-        -- 🔥 [C FFI 内存宏]：取地址符（对应 C 语言的 &指针传入）
+        --  [C FFI 内存宏]：取地址符（对应 C 语言的 &指针传入）
         if func_node.kind == "variable" and func_node.tk == "L2C_Ref" then
             return "&(" .. self:gen(node.e2[1]) .. ")"
         end
 
-        -- 🔥 [C FFI 内存宏]：原生强转 (Primitive Cast，专治 cstring 等基础类型)
+        --  [C FFI 内存宏]：原生强转 (Primitive Cast，专治 cstring 等基础类型)
         if func_node.kind == "variable" and func_node.tk == "L2C_Cast" then
             local ptr_exp = self:gen(node.e2[1])
             local type_node = node.e2[2]
@@ -41,12 +35,17 @@ function M:gen_op(node)
             return string.format("(@%s)(%s)", type_name, ptr_exp)
         end
         
-        -- 🔥 [C FFI 内存宏]：C 语言回调函数指针强转！
+        -- [C FFI 内存宏]：C 语言回调函数指针强转！
         if func_node.kind == "variable" and func_node.tk == "L2C_FuncPtr" then
             return "(@pointer)(" .. self:gen(node.e2[1]) .. ")"
         end
 
-        -- 🔥 [C FFI 内存宏]：静态持久化内存分配 (L2C_Static)
+        -- 物理指针整数化，碾压类型检查
+        if func_node.kind == "variable" and func_node.tk == "L2C_PtrAsInt" then
+            return "(@integer)(" .. self:gen(node.e2[1]) .. ")"
+        end
+
+        -- [C FFI 内存宏]：静态持久化内存分配 (L2C_Static)
         if func_node.kind == "variable" and func_node.tk == "L2C_Static" then
             local type_node = node.e2[1]
             -- 兼容传入字符或者直接传入类型名
@@ -62,7 +61,7 @@ function M:gen_op(node)
                 end)]], type_name)
         end
 
-        -- 🔥 [C FFI 内存宏]：零拷贝强转（Zero-Copy Cast 优雅 OOP 版）
+        --  [C FFI 内存宏]：零拷贝强转（Zero-Copy Cast 优雅 OOP 版）
         if func_node.kind == "op" and func_node.op.op == "." and func_node.e2.tk == "_cast" then
             local type_name = func_node.e1.tk
             local ptr_exp = self:gen(node.e2[1])
@@ -70,7 +69,7 @@ function M:gen_op(node)
             return string.format("(@*%s)(%s)", type_name, ptr_exp)
         end
 
-        --[[ 🛡️ [前提二：物理级自旋锁 API 映射]
+        --[[  [前提二：物理级自旋锁 API 映射]
 
         if func_node.kind == "variable" and func_node.tk == "L2C_Spinlock_Lock" then
             return "L2C_SPINLOCK_LOCK(" .. self:gen(node.e2[1]) .. ")"
@@ -79,9 +78,13 @@ function M:gen_op(node)
             return "L2C_SPINLOCK_UNLOCK(" .. self:gen(node.e2[1]) .. ")"
         end
 
-        --]]
+        if func_node.kind == "variable" and func_node.tk == "L2C_Memory_Barrier" then
+            return "l2c_memory_barrier()"
+        end
 
-        -- 🔥 [硬核手术二：防御性内联展开]
+        --]]
+  
+        --  [硬核手术二：防御性内联展开]
         if func_node.kind == "op" and func_node.op.op == "." and func_node.e2.tk == "_new" then
             local type_name = func_node.e1.tk
             local fields = self.record_registry[type_name] or {}
