@@ -32,14 +32,18 @@ local function run_tests()
     print("========================================")
 
     for _, file in ipairs(test_files) do
-        -- 读取 EXPECT 注释
+        -- 读取 EXPECT 和 EXPECT_FAIL 注释
         local expect_val = nil
+        local expect_fail_val = nil
         for line in io.lines(file) do
-            local match = line:match("%-%-%s*EXPECT:%s*(.*)")
-            if match then expect_val = match end
+            local match_ok = line:match("%-%-%s*EXPECT:%s*(.*)")
+            if match_ok then expect_val = match_ok end
+            
+            local match_fail = line:match("%-%-%s*EXPECT_FAIL:%s*(.*)")
+            if match_fail then expect_fail_val = match_fail end
         end
 
-        io.write(string.format("运行测试: %-25s ", file))
+        io.write(string.format("运行测试: %-30s ", file))
 
         --  [新增]：每次编译前，先删掉旧的幽灵二进制！
         os.execute("rm -f native_app")
@@ -47,30 +51,57 @@ local function run_tests()
         -- 调用我们的 l2c 编译
         os.execute("lua l2c.lua " .. file .. " > l2c_test.log 2>&1")
         
-        -- 假设你在 l2c.lua 里生成了 native_app，我们运行它
-        local handle = io.popen("./native_app 2>/dev/null")
-        if handle then
-            -- 1. 实际输出剔除所有空白字符
-            local result = handle:read("*a"):gsub("%s+", "")
-            handle:close()
-            
-            -- 2.  [核心校准]：让期望值在比对前，也同样剔除所有空白字符，实现物理对齐！
-            local clean_expect = expect_val and expect_val:gsub("%s+", "") or ""
-            
-            -- 3. 用洗干净的两端进行终极对齐
-            if result == clean_expect then
-                print(" [PASS]")
-                passed = passed + 1
+        --  反例测试逻辑 (Expected Fail)
+        if expect_fail_val then
+            local f = io.open("native_app", "r")
+            if f then
+                f:close()
+                print(" [FAIL] 预期编译熔断，但竟然生成了可执行文件！防线被击穿！")
+                failed = failed + 1
             else
-                print(" [FAIL] 期望: '" .. tostring(expect_val) .. "', 实际: '" .. tostring(result) .. "'")
+                local log_f = io.open("l2c_test.log", "r")
+                local log_content = log_f and log_f:read("*a") or ""
+                if log_f then log_f:close() end
+                
+                -- 使用 plain=true 进行纯文本匹配，防止特殊字符干扰
+                if log_content:find(expect_fail_val, 1, true) then
+                    print(" [PASS] 成功拦截非法语法！")
+                    passed = passed + 1
+                else
+                    print(" [FAIL] 编译确实失败了，但并非死于预期原因！")
+                    print("   期望包含: '" .. expect_fail_val .. "'")
+                    print("   实际日志: \n" .. log_content)
+                    failed = failed + 1
+                end
+            end
+
+        --  正例测试逻辑 (Expected Pass)
+        else
+            -- 假设你在 l2c.lua 里生成了 native_app，我们运行它
+            local handle = io.popen("./native_app 2>/dev/null")
+            if handle then
+                -- 1. 实际输出剔除所有空白字符
+                local result = handle:read("*a"):gsub("%s+", "")
+                handle:close()
+                
+                -- 2.  [核心校准]：让期望值在比对前，也同样剔除所有空白字符，实现物理对齐！
+                local clean_expect = expect_val and expect_val:gsub("%s+", "") or ""
+                
+                -- 3. 用洗干净的两端进行终极对齐
+                if result == clean_expect then
+                    print(" [PASS]")
+                    passed = passed + 1
+                else
+                    print(" [FAIL] 期望: '" .. tostring(expect_val) .. "', 实际: '" .. tostring(result) .. "'")
+                    failed = failed + 1
+                end
+            else
+                print(" [FAIL] 编译失败，未生成 native_app")
                 failed = failed + 1
             end
-        else
-            print(" [FAIL] 编译失败，未生成 native_app")
-            failed = failed + 1
         end
-
     end
+
     print("========================================")
     print(string.format(" 测试完成 | 通过: %d | 失败: %d", passed, failed))
     print("========================================")
