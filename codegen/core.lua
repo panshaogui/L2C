@@ -9,7 +9,7 @@ Codegen.__index = Codegen
 --  [L2C 物理域绝对禁令清单]：只要触碰，直接引发架构级熔断！
 local BANNED_AST_NODES = {
     ["table"] = "触发了动态表 (Table) 分配！这会引发严重的堆内存碎片与 GC 灾难。在 L2C 物理域中被严格禁止！请改用 L2C_Buffer 或静态 Record。",
-    ["function_expr"] = "触发了匿名闭包 (Closure)！闭包会隐式捕获外部变量并引发堆内存分配。L2C 严格禁止！请在顶层声明纯静态函数并使用 L2C_FuncPtr 传递指针。",
+    ["function"] = "触发了匿名闭包 (Closure)！闭包会隐式捕获外部变量并引发堆内存分配。L2C 严格禁止！请在顶层声明纯静态函数并使用 L2C_FuncPtr 传递指针。",
     ["forin"] = "触发了泛型迭代器循环 (ipairs/pairs)！迭代器在底层依赖闭包状态机，会触发 GC。在 L2C 物理域中，请使用最硬核的数值循环 (for i=1, n do) 遍历物理内存！"
 }
 
@@ -35,25 +35,30 @@ function Codegen:gen(node)
         for _, v in ipairs(node) do table.insert(out, self:gen(v)) end
         return table.concat(out, ", ")
     end
+
     local kind = node.kind
     if not kind then return "" end
+
+    --  [AST 第一道门控安检站]：优先拦截黑名单，无视是否存留历史 Handler！
+    if BANNED_AST_NODES[kind] then
+        print("\n========================================================")
+        print(" [L2C 架构熔断] 触犯 0-GC 物理纪律: '" .. kind .. "' 节点")
+        print("   -> 判决: " .. BANNED_AST_NODES[kind])
+        print("========================================================\n")
+        os.exit(1)
+    end
 
     local handler = self["gen_" .. kind]
     if handler then
         return handler(self, node)
     else
-        --  [AST 门控安检站]：对未知节点进行审判
+        --  遇到真正的开发中节点，进行友善提示
         print("\n========================================================")
-        if BANNED_AST_NODES[kind] then
-            print(" [L2C 架构熔断] 触犯 0-GC 物理纪律: '" .. kind .. "' 节点")
-            print("  -> 判决: " .. BANNED_AST_NODES[kind])
-        else
-            print(" [L2C 编译器提示] 遇到尚未支持的 AST 节点: '" .. kind .. "'")
-            print("  -> 状态: 该节点可能是合法的无状态逻辑 (如 repeat, goto 等)。")
-            print("  -> 行动: 引擎尚未对其支持。请在 codegen 模块中补充 `gen_" .. kind .. "` 方法！")
-        end
-        
+        print(" [L2C 编译器提示] 遇到尚未支持的 AST 节点: '" .. kind .. "'")
+        print("  -> 状态: 该节点可能是合法的无状态逻辑 (如 repeat, goto 等)。")
+        print("  -> 行动: 引擎尚未对其支持。请在 codegen 模块中补充 `gen_" .. kind .. "` 方法！")
         print("  ->  故障节点现场 Dump:")
+        
         for k, v in pairs(node) do 
             if type(v) ~= "table" then print("      [" .. k .. "] = " .. tostring(v)) end 
         end
