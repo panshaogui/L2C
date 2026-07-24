@@ -1,4 +1,4 @@
-# 🚀 L2C Compiler: The 0-GC Native Engine for HFT & IoT
+# L2C Compiler: The 0-GC Native Engine for HFT & IoT
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![0-GC](https://img.shields.io/badge/Memory-0--GC-red.svg)](#)
@@ -13,21 +13,21 @@ If you are tired of fighting C++ template errors, or frustrated by Python/Go GC 
 
 ---
 
-## ⚡ The "L2C Strict Subset" Philosophy (Read Before Use)
+## The "L2C Strict Subset" Philosophy (Read Before Use)
 
-**⚠️ WARNING: L2C IS NOT A GENERAL-PURPOSE LUA COMPILER.**
+** WARNING: L2C IS NOT A GENERAL-PURPOSE LUA COMPILER.**
 
 L2C physically strips out Garbage Collection. We force "Mechanical Sympathy" upon the developer. 
 If you want full Lua semantics with a VM, use LuaJIT. If you want to write strategy logic in script syntax but compile it to a **~35KB standalone executable** (or MCU firmware) that runs at the speed of raw ANSI C, you are in the right place.
 
-### ✅ What we EXCLUSIVELY support:
+### What we EXCLUSIVELY support:
 *   **Physical Stack Memory**: `L2C_Buffer(size)`, `L2C_NumberArray(size)` for O(1) allocation.
 *   **Tick-Level Arena Allocator**: 10MB pre-allocated pools with `L2C_Tick_Reset()` for O(1) instant memory recycling.
 *   **Zero-Copy Cast**: `Type._cast(ptr)` translates byte buffers directly into struct pointers without deserialization.
 *   **C-FFI Unity Build**: Direct injection of C headers and static libraries via `-- @l2c_import` and `@l2c_link`.
 *   **C Callback Pointers**: `L2C_FuncPtr(func)` safely casts Lua functions to `void*` for async OS callbacks.
 
-### ❌ What we STRICTLY FORBID:
+### What we STRICTLY FORBID:
 *   Dynamic string concatenation (`"a" .. "b"`).
 *   Untyped dynamic tables (Dictionaries).
 *   Closures (Upvalues) and Coroutines.
@@ -35,20 +35,20 @@ If you want full Lua semantics with a VM, use LuaJIT. If you want to write strat
 
 ---
 
-## 🛠️ Ecosystem & Standard Library (L2C-STD)
+## Ecosystem & Standard Library (L2C-STD)
 
 L2C comes with an expanding array of 0-GC FFI wrappers for the world's most powerful C/C++ libraries, featuring the **"Invisible Debt Registry"** to automatically handle linker flags (`-lc++`, `-lsodium`, etc.):
 
-*   🌐 **`std/zmq.tl`**: Microsecond-latency network gateways (ZeroMQ).
-*   🚀 **`std/nanomsg.tl`**: Nanosecond-latency IPC shared memory bus.
-*   💾 **`std/sqlite.tl`**: 0-allocation SQL transaction logging.
-*   ⚡ **`std/simdjson.tl`**: AVX-512/SSE4.2 accelerated JSON parsing via C++ wrappers.
-*   ⏱️ **`std/uv.tl`**: C10K async event loops (libuv).
-*   🔌 **`std/pico.tl` & `std/freertos.tl`**: Bare-metal RTOS task scheduling for RP2040 (Raspberry Pi Pico) and ESP32.
+*    **`std/zmq.tl`**: Microsecond-latency network gateways (ZeroMQ).
+*    **`std/nanomsg.tl`**: Nanosecond-latency IPC shared memory bus.
+*    **`std/sqlite.tl`**: 0-allocation SQL transaction logging.
+*    **`std/simdjson.tl`**: AVX-512/SSE4.2 accelerated JSON parsing via C++ wrappers.
+*    **`std/uv.tl`**: C10K async event loops (libuv).
+*    **`std/pico.tl` & `std/freertos.tl`**: Bare-metal RTOS task scheduling for RP2040 (Raspberry Pi Pico) and ESP32.
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### 1. Build the Compiler (Self-Contained Binary)
 Using our inception-style meta-compiler, generate a standalone `l2c_bin` that embeds the Lua VM and AST parser:
@@ -128,7 +128,7 @@ make -j4
 
 ---
 
-## 🤝 Contributing
+## Contributing
 This is a community-driven subset. Found a missing AST node that fits our 0-GC philosophy? PRs are highly welcome. Just add your `gen_xxx` in `codegen/` and provide a test case in `tests/unit/`.
 
 **For any feature request requiring a Garbage Collector: Won't fix. Closed.**

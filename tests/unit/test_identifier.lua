@@ -1,7 +1,7 @@
 -- tests/unit/test_identifier.lua
 local ident = require("codegen.identifier")
 
-print("🧪 [UNIT] 测试 identifier.lua (符号与 FFI 伪装) ...")
+print(" [UNIT] 测试 identifier.lua (符号与 FFI 伪装) ...")
 
 local mock_self = {
     ffi_typeids = { [999] = true } -- 假设 999 是记录在白皮书里的 FFI 类型
@@ -22,4 +22,4 @@ local arg_node = {
 }
 assert(ident.gen_argument(mock_self, arg_node) == "msg: cstring", "参数类型映射失败")
 
-print("✅ identifier.lua 测试通过！")
+print(" identifier.lua 测试通过！")

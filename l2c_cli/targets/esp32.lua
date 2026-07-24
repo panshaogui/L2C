@@ -14,7 +14,7 @@ function M.execute(tmp_file, output_bin)
         
         -- 1. 剥离断言
         c_src = c_src:gsub("NELUA_STATIC_ASSERT%b();", "// L2C: Stripped Arch Asserts")
-        -- 2. 🔥 物理扭曲：强行把标准的 C 入口，扭曲为 FreeRTOS / ESP-IDF 专属的 app_main！
+        -- 2.  物理扭曲：强行把标准的 C 入口，扭曲为 FreeRTOS / ESP-IDF 专属的 app_main！
         -- 顺便自动补齐 argc 和 argv 防止内部变量报错！
         c_src = c_src:gsub("int main%(int argc, char%*%* argv%) %{", "void app_main(void) {\n  int argc = 0;\n  char** argv = (char**)0;\n")
         
@@ -24,7 +24,7 @@ function M.execute(tmp_file, output_bin)
         
         local fw = io.open(out_c_file, "w")
         fw:write(c_src) fw:close()
-        print("✅ [L2C] ESP32 固件源码生成完毕！: ./" .. out_c_file)
+        print(" [L2C] ESP32 固件源码生成完毕！: ./" .. out_c_file)
     end
 end
 return M

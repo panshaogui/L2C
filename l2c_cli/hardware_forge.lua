@@ -18,7 +18,7 @@ function M.sniff_and_forge(bundled_code)
         nelua_bindings = ""
     }
 
-    -- 📡 1. 嗅探靶向平台，直接生成纯净目标 C 代码（告别 #if defined）
+    --  1. 嗅探靶向平台，直接生成纯净目标 C 代码（告别 #if defined）
     if bundled_code:match("std/pico%.tl") then
         cfg.arena_size = "8 * 1024"
         cfg.core_count = 2
@@ -34,7 +34,7 @@ function M.sniff_and_forge(bundled_code)
             #define L2C_SPINLOCK_UNLOCK(id) l2c_spinlock_unlock(id)
             #endif
         ]]
-        print("⚙️  [L2C 兵工厂] Pico 靶向，物理双核与自旋锁已就绪！")
+        print("  [L2C 兵工厂] Pico 靶向，物理双核与自旋锁已就绪！")
     elseif bundled_code:match("std/esp32%.tl") or bundled_code:match("std/freertos%.tl") then
         cfg.arena_size = "16 * 1024"
         cfg.core_count = 2
@@ -51,7 +51,7 @@ function M.sniff_and_forge(bundled_code)
             #define L2C_SPINLOCK_UNLOCK(id) l2c_spinlock_unlock(id)
             #endif
         ]]
-        print("⚙️  [L2C 兵工厂] ESP32 靶向，物理双核与自旋锁已就绪！")
+        print("  [L2C 兵工厂] ESP32 靶向，物理双核与自旋锁已就绪！")
     else
         cfg.core_id_macro = [[
             #include <stdint.h>
@@ -91,7 +91,7 @@ function M.sniff_and_forge(bundled_code)
         ]]
     end
 
-    -- 🛡️ 2. 无锁切片器：接受 uintptr_t (L2C integer) 直接强转内存指针！
+    --  2. 无锁切片器：接受 uintptr_t (L2C integer) 直接强转内存指针！
     cfg.spsc_c_decl = [[
         #ifndef L2C_SPSC_DEFINED
         #define L2C_SPSC_DEFINED
@@ -103,7 +103,7 @@ function M.sniff_and_forge(bundled_code)
         #endif
     ]]
 
-    -- 🔗 3. Nelua 中间层 FFI 映射签证
+    --  3. Nelua 中间层 FFI 映射签证
     cfg.nelua_bindings = [[
         local function L2C_Spinlock_Lock(id: integer): void <cimport 'L2C_SPINLOCK_LOCK', nodecl> end
         local function L2C_Spinlock_Unlock(id: integer): void <cimport 'L2C_SPINLOCK_UNLOCK', nodecl> end

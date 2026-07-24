@@ -7,7 +7,7 @@ local M = {}
 local bundler = require("l2c_cli.bundler")
 
 function M.execute(tmp_file, output_bin, deps)
-    print("⚙️  [L2C HOST 靶向] 启动 Clang/GCC 极限硬件优化...")
+    print(" [L2C HOST 靶向] 启动 Clang/GCC 极限硬件优化...")
 
     -- 1. 环境嗅探
     local is_musl = os.getenv("L2C_MUSL_FORGE") == "1"
@@ -49,17 +49,17 @@ function M.execute(tmp_file, output_bin, deps)
                             resolved_ldflags = resolved_ldflags .. " -static-libstdc++ -static-libgcc"
                         end
                     end
-		    print(string.format("   🛡️  [雷达触发] 检测到 %s 依赖链，环境感知自动偿还隐形债: %s", std_key, resolved_ldflags))
+		    print(string.format(" [雷达触发] 检测到 %s 依赖链，环境感知自动偿还隐形债: %s", std_key, resolved_ldflags))
 		    extra_ldflags = extra_ldflags .. resolved_ldflags
                     extra_cflags  = extra_cflags  .. debt.cflags
                 end
 
                 if f_check then
                     f_check:close()
-                    print("🔗 [L2C 物理拦截] 成功捕获静态库: " .. static_path)
+                    print(" [L2C 物理拦截] 成功捕获静态库: " .. static_path)
                     static_libs = static_libs .. " " .. static_path
                 else
-                    print(string.format("⚠️  [L2C 降级] 未找到静态 lib%s.a，退化为动态链接模式。", lib))
+                    print(string.format(" [L2C 降级] 未找到静态 lib%s.a，退化为动态链接模式。", lib))
                     dynamic_libs = dynamic_libs .. " -l" .. lib
                 end
             end
@@ -76,13 +76,13 @@ function M.execute(tmp_file, output_bin, deps)
     local extra_objs = ""
     for _, src in ipairs(deps.cpp_sources) do
         local obj = src:gsub("%.cpp$", ".o"):gsub("%.c$", ".o")
-        print("🔨 [L2C 外包编译] 正在锻造 C/C++ 胶水层: " .. src)
+        print(" [L2C 外包编译] 正在锻造 C/C++ 胶水层: " .. src)
         local cc_cmd = src:match("%.cpp$") and "clang++ -std=c++17" or "clang"
         local build_obj_cmd = string.format("%s -O3 -march=native -c %s -o %s %s", cc_cmd, src, obj, mac_cflags)
         
         local res = os.execute(build_obj_cmd)
         if res ~= 0 and res ~= true then
-            print("❌ 胶水层编译失败: " .. src)
+            print(" 胶水层编译失败: " .. src)
             os.exit(1)
         end
         extra_objs = extra_objs .. " " .. obj
@@ -100,10 +100,10 @@ function M.execute(tmp_file, output_bin, deps)
     os.execute("rm -f clib/*.o 2>/dev/null")
 
     if exit_code == 0 or exit_code == true then
-        print(string.format("✅ [L2C] 编译完美收官！终极主权二进制已生成: ./%s", output_bin))
-        os.execute("ls -lh " .. output_bin .. " | awk '{print \"📦 物理体积: \" $5}'")
+        print(string.format(" [L2C] 编译完美收官！终极主权二进制已生成: ./%s", output_bin))
+        os.execute("ls -lh " .. output_bin .. " | awk '{print \" 物理体积: \" $5}'")
     else
-        print("❌ [L2C] 底层 C 编译失败，请检查语法兼容性。")
+        print(" [L2C] 底层 C 编译失败，请检查语法兼容性。")
     end
 end
 

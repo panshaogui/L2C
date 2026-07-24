@@ -1,5 +1,5 @@
 -- tests/unit/unit_runner.lua
--- 🎯 路径向外翻两级，确保所有单体测试能找到 codegen
+--  路径向外翻两级，确保所有单体测试能找到 codegen
 package.path = package.path .. ";./?.lua;../?.lua;../../?.lua;./codegen/?.lua;../codegen/?.lua"
 
 local M = {}
@@ -14,7 +14,7 @@ function M.run()
     table.sort(test_files)
     
     local passed, failed = 0, 0
-    print("\n📡 [Phase 1] 正在轰炸单模块白盒测试 (Unit Tests)...")
+    print("\n [Phase 1] 正在轰炸单模块白盒测试 (Unit Tests)...")
     print("----------------------------------------")
     
     for _, file in ipairs(test_files) do
@@ -27,16 +27,16 @@ function M.run()
         local success, err = pcall(require, mod_name)
         
         if success then
-            print("✅ [PASS]")
+            print(" [PASS]")
             passed = passed + 1
         else
-            print("❌ [FAIL]\n\t[错误详情]: " .. tostring(err))
+            print(" [FAIL]\n\t[错误详情]: " .. tostring(err))
             failed = failed + 1
         end
     end
     
     print("----------------------------------------")
-    print(string.format("🟢 单体测试完成 | 通过: %d | 失败: %d", passed, failed))
+    print(string.format(" 单体测试完成 | 通过: %d | 失败: %d", passed, failed))
     return failed == 0 -- 如果没有失败，返回 true
 end
 

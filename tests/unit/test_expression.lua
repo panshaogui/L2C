@@ -1,7 +1,7 @@
 -- tests/unit/test_expression.lua
 local expr = require("codegen.expression")
 
-print("🧪 [UNIT] 测试 expression.lua (表达式与内联展开) ...")
+print(" [UNIT] 测试 expression.lua (表达式与内联展开) ...")
 
 local mock_self = {
     gen = function(self, node) return node.mock_val or "mock" end,
@@ -45,4 +45,4 @@ local cast_node = {
 }
 assert(expr.gen_op(mock_self, cast_node) == "(@cstring)(sql_buf)", "L2C_Cast 原生强转生成失败")
 
-print("✅ expression.lua 测试通过！")
+print(" expression.lua 测试通过！")

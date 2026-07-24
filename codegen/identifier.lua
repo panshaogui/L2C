@@ -5,10 +5,10 @@
 
 local M = {}
 
--- 🎯 [正规军闭环]：转译变量节点，精准降维打击 FFI 空间的游民符号
+--  [正规军闭环]：转译变量节点，精准降维打击 FFI 空间的游民符号
 function M:gen_variable(node)
     -- 如果变量标记是大写 C，直接优雅归化为小写 c，打通 FFI 伪命名空间
-    -- 🔥 拦截所有 C_ 开头或纯 C 的伪命名空间，降维至小写 c
+    --  拦截所有 C_ 开头或纯 C 的伪命名空间，降维至小写 c
     if node.tk == "C" or node.tk:match("^C_") then
         return "c"
     end
@@ -20,7 +20,7 @@ end
 function M:gen_identifier(node)
     local name = node.tk
 
-    -- 🎯 [类型安全检查]：检查当前节点的 typeid 是否记录在我们的 FFI 白皮书中
+    --  [类型安全检查]：检查当前节点的 typeid 是否记录在我们的 FFI 白皮书中
     if node.typeid and self.ffi_typeids and self.ffi_typeids[node.typeid] then
         -- 如果命中，优雅映射为 Nelua 的原生伪命名空间 c
         return "c"
@@ -30,7 +30,7 @@ function M:gen_identifier(node)
     return name
 end
 
--- 🎯 [物理闭环]：转译函数参数节点 (变量名: 类型)
+--  [物理闭环]：转译函数参数节点 (变量名: 类型)
 function M:gen_argument(node)
     local arg_name = node.tk
     local type_name = "integer" -- 兜底默认类型
@@ -61,7 +61,7 @@ end
 
 M.gen_variable_list = M.gen_expression_list
 
--- 🎯 [物理闭环]：转译类型标识符节点
+--  [物理闭环]：转译类型标识符节点
 function M:gen_type_identifier(node)
     return node.tk
 end

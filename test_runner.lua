@@ -6,12 +6,12 @@
 -- test_runner.lua：L2C 自动化单元测试框架
 package.path = package.path .. ";./?.lua;"
 
--- 🚀 [全新插队]：引入并运行单模块白盒测试器
+--  [全新插队]：引入并运行单模块白盒测试器
 local unit_runner = require("tests.unit.unit_runner")
 local unit_ok = unit_runner.run()
 
 if not unit_ok then
-    print("\n💥 [熔断] 单模块白盒测试有挂科，终止实弹演习！请先修复局部 Bug。")
+    print("\n [熔断] 单模块白盒测试有挂科，终止实弹演习！请先修复局部 Bug。")
     os.exit(1)
 end
 
@@ -28,12 +28,10 @@ local function run_tests()
     
     local passed, failed = 0, 0
     print("========================================")
-    print("🚀 启动 L2C 单元测试套件...")
+    print(" 启动 L2C 单元测试套件...")
     print("========================================")
 
     for _, file in ipairs(test_files) do
-	-- 🎯 [新增防卡死拦截]：如果是 7 号 ZMQ 实盘用例，不参与自动化盲测，我们手动运行它
-        
         -- 读取 EXPECT 注释
         local expect_val = nil
         for line in io.lines(file) do
@@ -43,7 +41,7 @@ local function run_tests()
 
         io.write(string.format("运行测试: %-25s ", file))
 
-        -- 🔥 [新增]：每次编译前，先删掉旧的幽灵二进制！
+        --  [新增]：每次编译前，先删掉旧的幽灵二进制！
         os.execute("rm -f native_app")
 
         -- 调用我们的 l2c 编译
@@ -56,28 +54,28 @@ local function run_tests()
             local result = handle:read("*a"):gsub("%s+", "")
             handle:close()
             
-            -- 2. 🎯 [核心校准]：让期望值在比对前，也同样剔除所有空白字符，实现物理对齐！
+            -- 2.  [核心校准]：让期望值在比对前，也同样剔除所有空白字符，实现物理对齐！
             local clean_expect = expect_val and expect_val:gsub("%s+", "") or ""
             
             -- 3. 用洗干净的两端进行终极对齐
             if result == clean_expect then
-                print("✅ [PASS]")
+                print(" [PASS]")
                 passed = passed + 1
             else
-                print("❌ [FAIL] 期望: '" .. tostring(expect_val) .. "', 实际: '" .. tostring(result) .. "'")
+                print(" [FAIL] 期望: '" .. tostring(expect_val) .. "', 实际: '" .. tostring(result) .. "'")
                 failed = failed + 1
             end
         else
-            print("❌ [FAIL] 编译失败，未生成 native_app")
+            print(" [FAIL] 编译失败，未生成 native_app")
             failed = failed + 1
         end
 
     end
     print("========================================")
-    print(string.format("🏆 测试完成 | 通过: %d | 失败: %d", passed, failed))
+    print(string.format(" 测试完成 | 通过: %d | 失败: %d", passed, failed))
     print("========================================")
     
-    -- 🔥 [护城河闸刀]：如果有任何测试失败，向操作系统返回失败状态码 (1)，强行掐断 CI/CD 流水线！
+    --  [护城河闸刀]：如果有任何测试失败，向操作系统返回失败状态码 (1)，强行掐断 CI/CD 流水线！
     if failed > 0 then
         os.exit(1)
     end

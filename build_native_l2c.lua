@@ -15,15 +15,15 @@ local function get_files(dir)
 end
 
 print("==================================================")
-print("📦 1. 正在提取 L2C 核心引擎与器官并焊入 Preload 矩阵...")
+print(" 1. 正在提取 L2C 核心引擎与器官并焊入 Preload 矩阵...")
 print("==================================================")
 local bundled_code = ""
 
---  [自依赖降维打击]：自动在当前系统中寻找 tl 和 inspect 的源码物理位置，生吞它们！
+--  [自依赖降维打击]：自动在当前系统中寻找 tl 和 inspect 的源码物理位置，生吞它们！
 local function bundle_vendor(mod_name)
     local path = package.searchpath(mod_name, package.path)
     if not path then
-        print("❌ 致命错误：本机找不到依赖库 " .. mod_name)
+        print(" 致命错误：本机找不到依赖库 " .. mod_name)
         os.exit(1)
     end
     local f = io.open(path, "r")
@@ -58,14 +58,14 @@ local f_main = io.open("l2c.lua", "r")
 bundled_code = bundled_code .. "\n-- [[ L2C 主引擎核心入口 ]] \n" .. f_main:read("*a")
 f_main:close()
 
-print("\n🧬 2. 正在将 Lua 源码编码为纯 C 物理字节流 (防转义逃逸)...")
+print("\n 2. 正在将 Lua 源码编码为纯 C 物理字节流 (防转义逃逸)...")
 local c_hex = {}
 for i = 1, #bundled_code do
     table.insert(c_hex, string.format("0x%02x", string.byte(bundled_code, i)))
 end
 local c_payload = table.concat(c_hex, ", ")
 
-print("⚙️  3. 正在锻造 C 语言物理外壳...")
+print(" 3. 正在锻造 C 语言物理外壳...")
 local c_code = string.format([[
 #include <stdio.h>
 #include <stdlib.h>
@@ -81,7 +81,7 @@ int main(int argc, char** argv) {
     lua_State *L = luaL_newstate();
     luaL_openlibs(L);
 
-    // 🎯 核心桥接校准：对齐标准 Lua 的全局 arg 表
+    //  核心桥接校准：对齐标准 Lua 的全局 arg 表
     // arg[-1] = 解释器(不填), arg[0] = 脚本/可执行文件本身, arg[1] = 第一个参数
     lua_newtable(L);
     for(int i = 0; i < argc; i++) {
@@ -94,7 +94,7 @@ int main(int argc, char** argv) {
 
     // 唤醒 L2C 编译器
     if (luaL_dostring(L, (const char*)l2c_payload) != LUA_OK) {
-        fprintf(stderr, "❌ L2C 内核崩溃: %%s\n", lua_tostring(L, -1));
+        fprintf(stderr, " L2C 内核崩溃: %%s\n", lua_tostring(L, -1));
         lua_close(L);
         return 1;
     }
@@ -108,16 +108,16 @@ local f_c = io.open("l2c_main.c", "w")
 f_c:write(c_code)
 f_c:close()
 
-print("⚡ 4. 召唤 Clang/GCC 编译器进行终极封测...")
+print(" 4. 召唤 Clang/GCC 编译器进行终极封测...")
 
---  跨平台探针弹匣：涵盖 Mac 静态/动态，以及 Alpine(Musl) / Ubuntu(Glibc)
--- 🎯 跨平台探针弹匣：新增去除了 -flto 的终极降级方案，以及覆盖不同命名的 lua 链接参数
+--  跨平台探针弹匣：涵盖 Mac 静态/动态，以及 Alpine(Musl) / Ubuntu(Glibc)
+--  跨平台探针弹匣：新增去除了 -flto 的终极降级方案，以及覆盖不同命名的 lua 链接参数
 local compile_cmds = {
     -- 1. Mac Homebrew 极限静态/动态
     "clang -O3 -flto l2c_main.c /opt/homebrew/lib/liblua.a -o l2c_bin -I/opt/homebrew/include/lua -I/opt/homebrew/include 2>/dev/null",
     "clang -O3 -flto l2c_main.c -o l2c_bin -L/opt/homebrew/lib -I/opt/homebrew/include/lua -I/opt/homebrew/include -llua 2>/dev/null",
     
-    -- 2. 🔥 Alpine Linux (Musl) 物理坐标级绝对静态封印！(追加 -static 彻底斩断 libc 依赖)
+    -- 2.  Alpine Linux (Musl) 物理坐标级绝对静态封印！(追加 -static 彻底斩断 libc 依赖)
     "clang -O3 -flto l2c_main.c /usr/lib/lua5.4/liblua.a -o l2c_bin -I/usr/include/lua5.4 -I/usr/include/lua -static -lm 2>/dev/null",
     "gcc -O3 -flto l2c_main.c /usr/lib/lua5.4/liblua.a -o l2c_bin -I/usr/include/lua5.4 -I/usr/include/lua -static -lm 2>/dev/null", 
 
@@ -132,7 +132,7 @@ local compile_cmds = {
 
 local res = false
 for _, cmd in ipairs(compile_cmds) do
-    print("    探针射击: " .. cmd:gsub(" 2>/dev/null", ""))
+    print("    探针射击: " .. cmd:gsub(" 2>/dev/null", ""))
     local status = os.execute(cmd)
     if status == 0 or status == true then
         res = true
@@ -142,8 +142,8 @@ end
 
 if res then
     os.execute("rm l2c_main.c")
-    print("\n 盗梦空间完美闭环！独立的 L2C 原生二进制已生成: ./l2c_bin")
-    os.execute("ls -lh l2c_bin | awk '{print \" 物理体积: \" $5}'")
+    print("\n 盗梦空间完美闭环！独立的 L2C 原生二进制已生成: ./l2c_bin")
+    os.execute("ls -lh l2c_bin | awk '{print \" 物理体积: \" $5}'")
 else
-    print("❌ 编译失败。请尝试手动运行 Clang 并检查您的 Lua 头文件与链接库路径。")
+    print(" 编译失败。请尝试手动运行 Clang 并检查您的 Lua 头文件与链接库路径。")
 end

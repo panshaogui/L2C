@@ -6,15 +6,15 @@
 local M = {}
 
 -- ------------------------------------------
--- 🔀 映射 4：控制流生成器 (If / ElseIf / Else)
+--  映射 1：控制流生成器 (If / ElseIf / Else)
 -- ------------------------------------------
 function M:gen_if(node)
     
-    -- 🔥 [L2C 终极净化]：探测并切除 Teal 偷偷注入的旧版 Lua 兼容垫片 (Polyfill)
+    --  [L2C 终极净化]：探测并切除 Teal 偷偷注入的旧版 Lua 兼容垫片 (Polyfill)
     if node.if_blocks and node.if_blocks[1] and node.if_blocks[1].exp then
         local first_cond = self:gen(node.if_blocks[1].exp)
         if first_cond:match("_VERSION") then
-            -- 🎯 [核心修复]：必须使用合法的 Nelua 注释语法 `--`，切忌使用 C 注释 `/* */`
+            --  [核心修复]：必须使用合法的 Nelua 注释语法 `--`，切忌使用 C 注释 `/* */`
             return "-- L2C: Stripped Teal Compat Polyfill"
         end
     end
@@ -44,12 +44,12 @@ function M:gen_if(node)
     return table.concat(out, "\n")
 end
 
--- 🎯 [探针闭环]：绝不瞎猜属性名，直接打印 while 节点的真实物理结构
+-- 2 [探针闭环]：绝不瞎猜属性名，直接打印 while 节点的真实物理结构
 function M:gen_while(node)
-    -- 🎯 [真相] Teal 的循环条件就在 node.exp 里，绝无二处
+    --  [真相] Teal 的循环条件就在 node.exp 里，绝无二处
     local condition = self:gen(node.exp)
     
-    -- 🎯 [真相] 循环体在 node.body 里
+    --  [真相] 循环体在 node.body 里
     local body = self:gen(node.body)
     
     -- 拼装 Nelua
@@ -66,7 +66,7 @@ function M:gen_break(node)
 end
 
 -- ------------------------------------------
--- 🔄 映射 5：循环生成器 (For-Loop 完美版)
+--  映射 4：循环生成器 (For-Loop 完美版)
 -- ------------------------------------------
 function M:gen_fornum(node)
     local out = {}
@@ -87,18 +87,43 @@ function M:gen_fornum(node)
     return table.concat(out, "\n")
 end
 
--- 🎯 [正规军底层闭环]：精准对齐 Teal AST 真实属性，彻底打通控制流
+-- 5 [正规军底层闭环]：精准对齐 Teal AST 真实属性，彻底打通控制流
 function M:gen_return(node)
     -- Teal AST 的返回值列表存放在 exps 属性中
     if node.exps then
         local exprs_str = self:gen(node.exps)
-        -- 🛡️ 防御：如果解包出来是空字符串，说明是裸 return 或者是无需返回值的退出
+        --  防御：如果解包出来是空字符串，说明是裸 return 或者是无需返回值的退出
         if exprs_str and exprs_str ~= "" then
             return "return " .. exprs_str
         end
     end
     
     return "return"
+end
+
+--  6. Repeat-Until 循环 (对应 C 语言的 do-while)
+function M:gen_repeat(node)
+    --  防御式属性探测：兼容 Teal 的 block 或 body 属性
+    local body_str = self:gen(node.block or node.body)
+    local cond_str = self:gen(node.cond)
+    -- Nelua 完美原生支持 repeat ... until 语法，直接一比一物理平移
+    return string.format("repeat\n%s\nuntil %s", body_str, cond_str)
+end
+
+--  7. 纯作用域代码块 (Do-Block)
+function M:gen_do(node)
+    local body_str = self:gen(node.block or node.body)
+    return string.format("do\n%s\nend", body_str)
+end
+
+--  8. 底层极客跳转 (Goto)
+function M:gen_goto(node)
+    return "goto " .. node.name
+end
+
+--  9. 跳转标签 (Label)
+function M:gen_label(node)
+    return "::" .. node.name .. "::"
 end
 
 return M
