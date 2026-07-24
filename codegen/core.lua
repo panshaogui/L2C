@@ -9,7 +9,7 @@ Codegen.__index = Codegen
 --  [L2C 物理域绝对禁令清单]：只要触碰，直接引发架构级熔断！
 local BANNED_AST_NODES = {
     ["table"] = "触发了动态表 (Table) 分配！这会引发严重的堆内存碎片与 GC 灾难。在 L2C 物理域中被严格禁止！请改用 L2C_Buffer 或静态 Record。",
-    ["function_expr"] = "触发了匿名闭包 (Closure)！闭包会隐式捕获外部变量并引发堆内存分配。L2C 严格禁止！请在顶层声明纯静态函数并使用 L2C_FuncPtr 传递指针。"
+    ["function_expr"] = "触发了匿名闭包 (Closure)！闭包会隐式捕获外部变量并引发堆内存分配。L2C 严格禁止！请在顶层声明纯静态函数并使用 L2C_FuncPtr 传递指针。",
     ["forin"] = "触发了泛型迭代器循环 (ipairs/pairs)！迭代器在底层依赖闭包状态机，会触发 GC。在 L2C 物理域中，请使用最硬核的数值循环 (for i=1, n do) 遍历物理内存！"
 }
 
