@@ -1,7 +1,7 @@
 -- tests/unit/test_literal.lua
 local literal = require("codegen.literal")
 
-print("🧪 [UNIT] 测试 literal.lua (字面量与连续内存) ...")
+print(" [UNIT] 测试 literal.lua (字面量与连续内存) ...")
 
 local mock_self = {
     gen = function(self, node) return node.mock_val or node.tk or "mock" end
@@ -27,4 +27,4 @@ local rec_node = {
 }
 assert(literal.gen_literal_table(mock_self, rec_node) == "Order{price = 100}", "Record 字面量生成失败")
 
-print("✅ literal.lua 测试通过！")
+print(" literal.lua 测试通过！")

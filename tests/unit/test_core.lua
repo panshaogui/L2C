@@ -1,7 +1,7 @@
 -- tests/unit/test_core.lua
 local core = require("codegen.core")
 
-print("🧪 [UNIT] 测试 core.lua (大脑与路由) ...")
+print(" [UNIT] 测试 core.lua (大脑与路由) ...")
 
 local codegen = core.new()
 
@@ -26,4 +26,4 @@ local stmts_node = { { kind = "mock", mock_val = "stmt1" }, { kind = "mock", moc
 local stmts_res = codegen:gen_statements(stmts_node)
 assert(stmts_res == "stmt1\nstmt2", "statements 容器拼接失败")
 
-print("✅ core.lua 测试通过！")
+print(" core.lua 测试通过！")

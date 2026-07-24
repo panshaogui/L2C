@@ -42,7 +42,7 @@ function M:gen_op(node)
 
         -- 物理指针整数化，碾压类型检查
         if func_node.kind == "variable" and func_node.tk == "L2C_PtrAsInt" then
-            return "(@integer)(" .. self:gen(node.e2[1]) .. ")"
+            return "(@integer)((@usize)(" .. self:gen(node.e2[1]) .. "))"
         end
 
         -- [C FFI 内存宏]：静态持久化内存分配 (L2C_Static)
@@ -101,7 +101,7 @@ function M:gen_op(node)
                     arg_val = self:gen(arg_node)
                     param_index = param_index + 1
                 else
-                    -- 🛡️ [安全兜底] 如果高层少传了参数，根据强类型自动补齐默认值！防止 C 脏内存！
+                    --  [安全兜底] 如果高层少传了参数，根据强类型自动补齐默认值！防止 C 脏内存！
                     if f_info.type == "integer" or f_info.type == "number" then
                         arg_val = "0"
                     elseif f_info.type == "boolean" then
@@ -127,7 +127,7 @@ function M:gen_op(node)
         return self:gen(node.e1) .. "(" .. self:gen(node.e2) .. ")"
 
     elseif op_sym == "." then
-        -- 🎯 [正规军闭环]：在这里拦截点号点访问！
+        --   [正规军闭环]：在这里拦截点号点访问！
         -- 递归调用 self:gen(node.e1)，如果左节点是大写 C 的变量，它会被我们的 gen_variable 拦截成小写 "c"
         local left = self:gen(node.e1)
         local right = self:gen(node.e2)
@@ -136,7 +136,7 @@ function M:gen_op(node)
 
     end
 
-    -- 🎯 [正规军底层闭环]：拦截 Lua 的字符串连接符，规避 Nelua 的强类型编译崩溃
+    --   [正规军底层闭环]：拦截 Lua 的字符串连接符，规避 Nelua 的强类型编译崩溃
     if op_sym == ".." then
         -- 在 Nelua 世界中，如果用于 print 打印，直接转换成多参数（用逗号隔开）
         -- 比如 "count=" .. count  =>  "count=", count
@@ -146,12 +146,12 @@ function M:gen_op(node)
     end
 
     if op_sym == "@index" then
-        -- 🎯 1-based (Teal) 到 0-based (Nelua/C) 的平移，逻辑完美
+        --   1-based (Teal) 到 0-based (Nelua/C) 的平移，逻辑完美
         return self:gen(node.e1) .. "[" .. self:gen(node.e2) .. " - 1]"
     else
-        -- 🔥 [位运算与一元操作护甲]：如果发现 e2 是空的，说明这是一个一元操作符 (如 ~a, -a, not a)
+        --   [位运算与一元操作护甲]：如果发现 e2 是空的，说明这是一个一元操作符 (如 ~a, -a, not a)
         if node.e2 == nil then
-            -- 🎯 唯独在这里加了一个空格 " "，彻底防止 not a 粘连变成 nota
+            --   唯独在这里加了一个空格 " "，彻底防止 not a 粘连变成 nota
             return op_sym .. " " .. self:gen(node.e1)
         end
         
@@ -161,7 +161,7 @@ function M:gen_op(node)
 end
 
 -- ------------------------------------------
--- ✏️ 映射 6：变量重新赋值 (Assignment)
+--  映射 6：变量重新赋值 (Assignment)
 -- ------------------------------------------
 function M:gen_assignment(node)
     -- Teal AST 中，赋值语句的左边叫 vars，右边叫 exps
@@ -170,7 +170,7 @@ function M:gen_assignment(node)
     return vars_str .. " = " .. exps_str
 end
 
--- 🎯 [物理闭环]：转译括号表达式节点
+--  [物理闭环]：转译括号表达式节点
 function M:gen_paren(node)
     -- node[1] 或 node.e1 通常代表括号内部的表达式，直接递归翻译并包上小括号
     return string.format("(%s)", self:gen(node[1] or node.e1))

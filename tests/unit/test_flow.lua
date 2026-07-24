@@ -1,7 +1,7 @@
 -- tests/unit/test_flow.lua
 local flow = require("codegen.flow")
 
-print("🧪 [UNIT] 测试 flow.lua (控制流) ...")
+print(" [UNIT] 测试 flow.lua (控制流) ...")
 
 -- 伪造注入的 self 上下文
 local mock_self = {
@@ -50,4 +50,20 @@ local poly_res = flow.gen_if(mock_self, polyfill_node)
 -- 断言它必须被安全切除，且必须是合法的 Nelua 注释语法（--），绝不能是 C 语法（/*）
 assert(poly_res == "-- L2C: Stripped Teal Compat Polyfill", "幽灵垫片切除失败或注释语法非法")
 
-print("✅ flow.lua 测试通过！")
+-- 7. [TDD] 测试 repeat-until 循环 (C 语言 do-while 的等价物)
+local repeat_node = { cond = { mock_val = "x>10" }, block = { mock_val = "add()" } }
+assert(flow.gen_repeat(mock_self, repeat_node) == "repeat\nadd()\nuntil x>10", "Repeat 循环生成失败")
+
+-- 8. [TDD] 测试 do 作用域块
+local do_node = { block = { mock_val = "step()" } }
+assert(flow.gen_do(mock_self, do_node) == "do\nstep()\nend", "Do 作用域块生成失败")
+
+-- 9. [TDD] 测试极客底层跳转 (Goto)
+local goto_node = { name = "escape_hatch" }
+assert(flow.gen_goto(mock_self, goto_node) == "goto escape_hatch", "Goto 指令生成失败")
+
+-- 10. [TDD] 测试跳转标签 (Label)
+local label_node = { name = "escape_hatch" }
+assert(flow.gen_label(mock_self, label_node) == "::escape_hatch::", "Label 标签生成失败")
+
+print(" flow.lua 测试通过！")

@@ -22,7 +22,7 @@ for i = 2, #arg do
     if arg[i]:match("^%-%-target=") then target = arg[i]:match("^%-%-target=(.+)") end
 end
 
-print(string.format("🚀 [L2C] 启动构建，目标终端: %s，入口: %s", target:upper(), input_file))
+print(string.format(" [L2C] 启动构建，目标终端: %s，入口: %s", target:upper(), input_file))
 
 -- 1. 组装与语法分析
 local bundled_code, deps = bundler.bundle(input_file)

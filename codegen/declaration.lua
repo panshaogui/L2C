@@ -7,7 +7,7 @@ local M = {}
 
 -- 映射 1：Teal Record -> Nelua @record (带有类型感知的防御性注册表 + C FFI 探针)
 function M:gen_local_type(node)
-    -- 🎯 [核心修复]：不要盲目信任 node.tk！
+    --  [核心修复]：不要盲目信任 node.tk！
     -- 如果 node.name 存在，说明它是个正规的类型定义节点（如 local type xxx = record），优先从 name 里榨取真名
     local name = node.tk
     if node.name and node.name.tk then
@@ -19,11 +19,11 @@ function M:gen_local_type(node)
         return "" 
     end
 
-    -- 🔥 [FFI 闭环]：精准捕获特殊命名空间 C 或 C_xxx，物理将 Teal 的声明转换为 Nelua FFI 绑定！
+    --  [FFI 闭环]：精准捕获特殊命名空间 C 或 C_xxx，物理将 Teal 的声明转换为 Nelua FFI 绑定！
     if name == "C" or name:match("^C_") then
         local def = node.value and node.value.newtype and node.value.newtype.def
         if def and def.typeid then
-            -- 🎯 [防御性初始化白皮书]：如果还不存在就就地创建，绝对不触动老哥你原本的任何 registry
+            --  [防御性初始化白皮书]：如果还不存在就就地创建，绝对不触动老哥你原本的任何 registry
             self.ffi_typeids = self.ffi_typeids or {}
             self.ffi_typeids[def.typeid] = true
         end
@@ -31,7 +31,7 @@ function M:gen_local_type(node)
         if not def or def.typename ~= "record" then return "" end
         
         local out = {}
-        -- 🛡️ [防连环雷]：确保在多文件物理拼接时，只生成一次 c 记录的全局外壳！
+        --  [防连环雷]：确保在多文件物理拼接时，只生成一次 c 记录的全局外壳！
         if not self.c_namespace_emitted then
             table.insert(out, "global c = @record{}")
             self.c_namespace_emitted = true
@@ -93,10 +93,10 @@ function M:gen_local_type(node)
     
     self.record_registry = self.record_registry or {}
     
-    -- 🔥 [升级]：不仅保存字段名，还保存类型，用于后续的安全兜底初始化
+    --  [升级]：不仅保存字段名，还保存类型，用于后续的安全兜底初始化
     local fields_info = {}
     for _, field_name in ipairs(def.field_order or {}) do
-        -- 🎯 [精确对齐]：在这里同时拦截 _new 和所有类型为 "function" 的方法字段，彻底闭环
+        --  [精确对齐]：在这里同时拦截 _new 和所有类型为 "function" 的方法字段，彻底闭环
         local f_node = def.fields[field_name]
         if field_name ~= "_new" and f_node and f_node.typename ~= "function" then
             table.insert(fields_info, { 
@@ -109,7 +109,7 @@ function M:gen_local_type(node)
     
     local out = {}
     if #fields_info == 0 then
-        -- 🎯 [FFI 物理降维]：如果发现这是一个空 Record，说明它是 C 语言的不透明指针占位符。
+        --  [FFI 物理降维]：如果发现这是一个空 Record，说明它是 C 语言的不透明指针占位符。
         -- 直接将其映射为底层 C 的 void* (Nelua 叫 @pointer)
         table.insert(out, string.format("local %s = @pointer", name))
     else
@@ -140,24 +140,24 @@ function M:gen_local_declaration(node)
             local size = self:gen(exp.e2[1])
             return string.format("local %s: [%s]byte", var_name, size)
         end
-        -- 🔥 宏 2：强类型定长数字栈数组
+        --  宏 2：强类型定长数字栈数组
         if exp.e1.tk == "L2C_NumberArray" then
             local size = self:gen(exp.e2[1])
             return string.format("local %s: [%s]number", var_name, size)
         end
-        -- 🔥 宏 3：强类型定长整数栈数组
+        --  宏 3：强类型定长整数栈数组
         if exp.e1.tk == "L2C_IntegerArray" then
             local size = self:gen(exp.e2[1])
             return string.format("local %s: [%s]integer", var_name, size)
         end
-        -- 🔥 [OOP 魔法宏]：拦截 Type._ptr()，在 C 栈上强制声明未初始化的 void* 物理指针！
+        --  [OOP 魔法宏]：拦截 Type._ptr()，在 C 栈上强制声明未初始化的 void* 物理指针！
         local fnode = exp.e1
         if fnode.kind == "op" and fnode.op.op == "." and fnode.e2.tk == "_ptr" then
             return string.format("local %s: pointer", var_name)
         end
     end
     
-    -- 🛡️ [安全兜底] 如果没有赋值表达式，绝不生成带 "=" 的乱码
+    --  [安全兜底] 如果没有赋值表达式，绝不生成带 "=" 的乱码
     if exps_str == "" then
         return string.format("local %s", var_name)
     else
@@ -179,7 +179,7 @@ function M:gen_local_function(node)
                     t_name = arg.argtype.names[1] 
                 end
                 
-                -- 🔥 [核心修复]：把 []type 升级为安全的 span(type)
+                --  [核心修复]：把 []type 升级为安全的 span(type)
                 if t_name == "array" and arg.argtype.elements then
                     local e_name = arg.argtype.elements.typename or "any"
                     if e_name == "nominal" and arg.argtype.elements.names then 
@@ -188,7 +188,7 @@ function M:gen_local_function(node)
                     t_name = "span(" .. e_name .. ")"
                 end
 
-                -- 🔥 [物理降维]：业务函数如果传 any，在底层就是 C 语言的不透明指针 void* (pointer)！
+                --  [物理降维]：业务函数如果传 any，在底层就是 C 语言的不透明指针 void* (pointer)！
                 if t_name == "any" then t_name = "pointer" end
                 
                 table.insert(args_list, arg.tk .. ": " .. t_name)
@@ -206,7 +206,7 @@ function M:gen_local_function(node)
     return header .. "\n" .. body .. "\n" .. self:indent() .. "end"
 end
 
--- 🔥 [架构拓荒]：打通底层全局函数 (global function) 声明，用于导出 C 核心入口
+--  [架构拓荒]：打通底层全局函数 (global function) 声明，用于导出 C 核心入口
 function M:gen_global_function(node)
     local name = node.name and node.name.tk or "anon"
     local args_list = {}
@@ -218,7 +218,7 @@ function M:gen_global_function(node)
                     t_name = arg.argtype.names[1] 
                 end
                 
-                -- 🔥 [降维打击：物理数组参数解包]
+                --  [降维打击：物理数组参数解包]
                 if t_name == "array" and arg.argtype.elements then
                     local e_name = arg.argtype.elements.typename or "any"
                     if e_name == "nominal" and arg.argtype.elements.names then 
@@ -227,7 +227,7 @@ function M:gen_global_function(node)
                     t_name = "span(" .. e_name .. ")"
                 end
 
-                -- 🔥 [物理降维]：任何 any 参数都必须堕落为纯 C 指针
+                --  [物理降维]：任何 any 参数都必须堕落为纯 C 指针
                 if t_name == "any" then t_name = "pointer" end
                 
                 table.insert(args_list, arg.tk .. ": " .. t_name)
@@ -245,7 +245,7 @@ function M:gen_global_function(node)
     return header .. "\n" .. body .. "\n" .. self:indent() .. "end"
 end
 
--- 🔥 [物理闭环]：精准捕获并转译 Teal 的 record_function 节点
+--  [物理闭环]：精准捕获并转译 Teal 的 record_function 节点
 function M:gen_record_function(node)
     local record_name = self:gen(node.fn_owner)
     local method_name = self:gen(node.name)
@@ -253,7 +253,7 @@ function M:gen_record_function(node)
     local args = self:gen(node.args)
     local body = self:gen(node.body)
     
-    -- 🔥 [核心校准]：Teal 的方法参数体里带着显式的 "self, "，而 Nelua 的冒号语法糖会自动注入 self。
+    --  [核心校准]：Teal 的方法参数体里带着显式的 "self, "，而 Nelua 的冒号语法糖会自动注入 self。
     -- 我们在这里把多余的 self 声明剔除掉，防止 Nelua 推断出 any 从而崩溃。
     args = args:gsub("^self%s*,%s*", "") -- 擦除开头的 "self, "
     args = args:gsub("^self$", "")       -- 如果只有单参数 self，直接擦干

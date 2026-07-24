@@ -1,7 +1,7 @@
 -- tests/unit/test_declaration.lua
 local decl = require("codegen.declaration")
 
-print("🧪 [UNIT] 测试 declaration.lua (声明与宏) ...")
+print(" [UNIT] 测试 declaration.lua (声明与宏) ...")
 
 local mock_self = {
     indent_level = 0,
@@ -46,4 +46,4 @@ local array_macro_node = {
 }
 assert(decl.gen_local_declaration(mock_self, array_macro_node) == "local fft_buf: [256]number", "L2C_NumberArray 宏展开失败")
 
-print("✅ declaration.lua 测试通过！")
+print(" declaration.lua 测试通过！")
