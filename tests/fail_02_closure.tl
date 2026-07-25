@@ -1,5 +1,5 @@
 -- tests/fail_02_closure.tl
--- EXPECT_FAIL: 触发了匿名闭包 (Closure)
+-- EXPECT_FAIL: E002
 
 local function do_something(cb: function())
     cb()

@@ -15,16 +15,16 @@ local type C_PICO = record
     gpio_set_dir: function(integer, integer)
     gpio_put: function(integer, integer)
     
-    -- 🔥 扩容 ADC 麦克风采样接口
+    -- 扩容 ADC 麦克风采样接口
     adc_init: function()
     adc_gpio_init: function(integer)
     adc_select_input: function(integer)
     adc_read: function(): integer
     
-    -- 🔥 扩容微秒级硬实时休眠（用于死死锁住 8000Hz 采样率）
+    -- 扩容微秒级硬实时休眠（用于死死锁住 8000Hz 采样率）
     sleep_us: function(integer)
 
-    -- 🔥 扩容双核引擎与硬件 FIFO 寄存器通信 (纳秒级物理通道)
+    -- 扩容双核引擎与硬件 FIFO 寄存器通信 (纳秒级物理通道)
     multicore_launch_core1: function(any)
     multicore_fifo_push_blocking: function(integer)
     multicore_fifo_pop_blocking: function(): integer

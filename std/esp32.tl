@@ -26,6 +26,6 @@ local ESP_GPIO_MODE_OUTPUT: integer = 2
 -- 极简封装
 local function esp32_delay_ms(ms: integer)
     -- ESP-IDF 中，通常 1 tick = 10ms (Hz=100)，或者 1 tick = 1ms (Hz=1000)
-    -- 🔥 [核心修复]：使用向下取整除法 //，确保返回绝对的 integer 给底层的 C 语言！
+    -- [核心修复]：使用向下取整除法 //，确保返回绝对的 integer 给底层的 C 语言！
     C_ESP32.vTaskDelay(ms // 10) 
 end

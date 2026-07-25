@@ -43,7 +43,8 @@ function M.build_nelua(bundled_code, deps, input_file)
         os.exit(1)
     end
 
-    local engine = Codegen.new()
+    -- 核心修复：把合并后的源码和 Source Map 一起交给编译器大脑！
+    local engine = Codegen.new(bundled_code, deps.line_map)
     local nelua_code = engine:gen(result.ast)
     
     -- 模块配置并组装

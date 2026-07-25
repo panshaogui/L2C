@@ -1,5 +1,5 @@
 -- tests/fail_03_forin.tl
--- EXPECT_FAIL: 触发了泛型迭代器循环
+-- EXPECT_FAIL: E003
 
 print("准备分配合法的物理定长栈数组...")
 local arr: {integer} = {10, 20, 30}

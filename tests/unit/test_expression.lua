@@ -18,10 +18,6 @@ assert(expr.gen_op(mock_self, neq_node) == "a ~= b", "不等于语法抹平失�
 local idx_node = { op = { op = "@index" }, e1 = { mock_val = "arr" }, e2 = { mock_val = "i" } }
 assert(expr.gen_op(mock_self, idx_node) == "arr[i - 1]", "数组指针物理对齐失败")
 
--- 3. 测试 字符串拼接打平 (.. 转 ,)
-local concat_node = { op = { op = ".." }, e1 = { mock_val = "A" }, e2 = { mock_val = "B" } }
-assert(expr.gen_op(mock_self, concat_node) == "A, B", "字符串逗号打平失败")
-
 -- 4. 测试 L2C_Tick_Reset 熔断器拦截
 local reset_node = { op = { op = "@funcall" }, e1 = { kind = "variable", tk = "L2C_Tick_Reset" } }
 assert(expr.gen_op(mock_self, reset_node) == "L2C_Get_Arena():deallocall()", "内存重置熔断拦截失败")

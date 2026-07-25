@@ -36,11 +36,7 @@ function M:gen_literal_table(node)
     
     --  [L2C 深度语义熔断]：既不是数组，也不是 Record。绝对是非法的动态 GC 表！
     if type_prefix == "" then
-        print("\n========================================================")
-        print(" [L2C 架构熔断] 触犯 0-GC 物理纪律: 'literal_table' 节点")
-        print("   -> 判决: 触发了动态表 (Table) 分配！这会引发严重的堆内存碎片与 GC 灾难。在 L2C 物理域中被严格禁止！请改用 L2C_Buffer 或静态 Record。")
-        print("========================================================\n")
-        os.exit(1)
+        self:panic("E001", node)
     end
 
     -- 结构体(Record)的生成逻辑保持不变
