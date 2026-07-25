@@ -6,7 +6,7 @@
 -- std/simdjson.tl
 -- @l2c_link: simdjson
 -- @l2c_source: clib/simdjson_wrapper.cpp
--- 🔥 [补齐契约]：引入咱们的本地 C 语言头文件，补齐函数签名！
+-- [补齐契约]：引入咱们的本地 C 语言头文件，补齐函数签名！
 -- @l2c_include: clib/simdjson_wrapper.h
 
 local type simd_ptr = record end

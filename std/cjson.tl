@@ -28,7 +28,7 @@ end
 
 local function cjson_get_number(obj: cJSON_ptr, key: string): number
     local item = C_CJSON.cJSON_GetObjectItemCaseSensitive(obj, key)
-    -- 🔥 恢复高层优雅：直接用 nil，底层引擎会帮我们映射为 nilptr！
+    -- 恢复高层优雅：直接用 nil，底层引擎会帮我们映射为 nilptr！
     if item ~= nil and C_CJSON.cJSON_IsNumber(item) ~= 0 then
         return C_CJSON.cJSON_GetNumberValue(item)
     end
@@ -36,7 +36,7 @@ local function cjson_get_number(obj: cJSON_ptr, key: string): number
 end
 
 local function cjson_free(obj: cJSON_ptr)
-    -- 🔥 恢复高层优雅：直接用 nil
+    -- 恢复高层优雅：直接用 nil
     if obj ~= nil then
         C_CJSON.cJSON_Delete(obj)
     end

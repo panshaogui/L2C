@@ -128,19 +128,21 @@ function M:gen_op(node)
 
     elseif op_sym == "." then
         --   [正规军闭环]：在这里拦截点号点访问！
-        -- 递归调用 self:gen(node.e1)，如果左节点是大写 C 的变量，它会被我们的 gen_variable 拦截成小写 "c"
         local left = self:gen(node.e1)
         local right = self:gen(node.e2)
         
+        -- [L2C 深度语义熔断]：封杀动态字符串库
+        if left == "string" then
+            self:panic("E005", node)
+        end
+
         return left .. "." .. right
 
     end
 
-    --   [正规军底层闭环]：拦截 Lua 的字符串连接符，规避 Nelua 的强类型编译崩溃
+    -- [L2C 深度语义熔断]：封杀 Lua 的字符串连接符，彻底断绝隐式内存分配
     if op_sym == ".." then
-        -- 在 Nelua 世界中，如果用于 print 打印，直接转换成多参数（用逗号隔开）
-        -- 比如 "count=" .. count  =>  "count=", count
-        return self:gen(node.e1) .. ", " .. self:gen(node.e2)
+        self:panic("E004", node)
     elseif op_sym == "==" then op_sym = "=="
 
     end

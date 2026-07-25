@@ -15,7 +15,7 @@ end
 
 -- 高层优雅封装，扁平化命名防止冲突
 local function freertos_create_task(name: string, func_ptr: any)
-    -- 🔥 核心降维打击：利用 L2C_FuncPtr 把 Teal 局部函数强转为 C 物理指针！
+    -- 核心降维打击：利用 L2C_FuncPtr 把 Teal 局部函数强转为 C 物理指针！
     C_FREERTOS.xTaskCreate(func_ptr, name, 256, nil, 1, nil)
 end
 

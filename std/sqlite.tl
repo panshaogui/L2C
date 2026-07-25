@@ -9,7 +9,7 @@
 
 -- 声明不透明的数据库指针 (底层映射为 void*)
 local type sqlite3 = record 
-    -- 🔥 声明物理指针魔法，骗过 Teal 静态检查
+    -- 声明物理指针魔法，骗过 Teal 静态检查
     _ptr: function(): sqlite3
 end
 

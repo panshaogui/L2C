@@ -1,5 +1,5 @@
 -- tests/fail_01_dynamic_table.tl
--- EXPECT_FAIL: 触发了动态表 (Table) 分配
+-- EXPECT_FAIL: E001
 
 print("准备分配一个恶心的动态表...")
 
