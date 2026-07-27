@@ -52,13 +52,18 @@ function M.bundle(input_file)
         
         local orig_line = 1
         for line in f:lines() do
-            local import_file = line:match("%-%-%s*@l2c_import:%s*([%w_%.%-%/]+)")
-            if import_file then
-                add_line("-- IMPORT START: " .. import_file .. " --", file_path, orig_line)
-                read_and_bundle(import_file)
-                add_line("-- IMPORT END --", file_path, orig_line)
+            -- [L2C IDE 隐身衣]：遇到给 VSCode 看的类型声明库，直接在物理域抹除！
+            if line:match('require%s*%(?%s*["\']l2c%.d["\']%s*%)?') then
+                -- Do nothing (相当于跳过)
             else
-                add_line(line, file_path, orig_line)
+                local import_file = line:match("%-%-%s*@l2c_import:%s*([%w_%.%-%/]+)")
+                if import_file then
+                    add_line("-- IMPORT START: " .. import_file .. " --", file_path, orig_line)
+                    read_and_bundle(import_file)
+                    add_line("-- IMPORT END --", file_path, orig_line)
+                else
+                    add_line(line, file_path, orig_line)
+                end
             end
             orig_line = orig_line + 1
         end

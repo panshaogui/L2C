@@ -31,3 +31,8 @@ esp32_forge/managed_components/
 .DS_Store
 __MACOSX/
 native_app.dSYM/
+
+# Vscode
+.vscode/
+tlconfig.lua
+l2c/

@@ -7,6 +7,11 @@
 local bundler = require("l2c_cli.bundler")
 local builder = require("l2c_cli.builder")
 
+-- [IDE 野路子]：无论后续编译是否报错，优先刷新 VSCode 智能提示！
+pcall(function()
+    require("l2c_cli.snippet_gen").generate("l2c.d.tl")
+end)
+
 local input_file = arg[1]
 local output_bin = "native_app"
 local target = "host"
