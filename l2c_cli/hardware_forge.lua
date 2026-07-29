@@ -70,10 +70,9 @@ function M.sniff_and_forge(bundled_code)
             #define L2C_SPINLOCK_DEFINED
             #include <stdatomic.h>
             #include <pthread.h>
-            static atomic_flag g_l2c_pc_locks[8] = { ATOMIC_FLAG_INIT, ATOMIC_FLAG_INIT, ATOMIC_FLAG_INIT, ATOMIC_FLAG_INIT, ATOMIC_FLAG_INIT, ATOMIC_FLAG_INIT, ATOMIC_FLAG_INIT, ATOMIC_FLAG_INIT };
+            static atomic_flag g_l2c_pc_locks[8] = {0};
             static inline void l2c_spinlock_lock(int id) {
-                int idx = id & 7;
-                while (atomic_flag_test_and_set_explicit(&g_l2c_pc_locks[idx], memory_order_acquire)) {
+                while (atomic_flag_test_and_set_explicit(&g_l2c_pc_locks[id & 7], memory_order_acquire)) {
                     #if defined(__x86_64__) || defined(_M_X64)
                     __builtin_ia32_pause();
                     #elif defined(__aarch64__)
@@ -81,11 +80,25 @@ function M.sniff_and_forge(bundled_code)
                     #endif
                 }
             }
-            static inline void l2c_spinlock_unlock(int id) { atomic_flag_clear_explicit(&g_l2c_pc_locks[id & 7], memory_order_release); }
-            static inline void l2c_launch_core1(void* func_ptr) { 
-                pthread_t t; pthread_create(&t, NULL, (void*(*)(void*))func_ptr, NULL); pthread_detach(t); 
+            static inline void l2c_spinlock_unlock(int id) { 
+                __sync_synchronize(); atomic_flag_clear_explicit(&g_l2c_pc_locks[id & 7], memory_order_release); 
             }
-            #define L2C_SPINLOCK_LOCK(id)   l2c_spinlock_lock(id)
+            static void* l2c_pthread_wrapper(void* arg) {
+                void (*func)(void) = (void (*)(void))arg;
+                func();
+                return NULL;
+            }
+            // [核心修复] 强制注入 8MB 栈空间，粉碎 Musl 默认的 128KB 爆栈陷阱！
+            static inline void l2c_launch_core1(void* func_ptr) { 
+                pthread_t t; 
+                pthread_attr_t attr;
+                pthread_attr_init(&attr);
+                pthread_attr_setstacksize(&attr, 8 * 1024 * 1024);
+                pthread_create(&t, &attr, l2c_pthread_wrapper, func_ptr); 
+                pthread_attr_destroy(&attr);
+                pthread_detach(t); 
+            }
+            #define L2C_SPINLOCK_LOCK(id) l2c_spinlock_lock(id)
             #define L2C_SPINLOCK_UNLOCK(id) l2c_spinlock_unlock(id)
             #endif
         ]]
