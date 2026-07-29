@@ -47,11 +47,27 @@ function M.bundle(input_file)
     local function read_and_bundle(file_path)
         if bundled_set[file_path] then return end
         bundled_set[file_path] = true
-        local f = io.open(file_path, "r")
-        if not f then print("找不到导入文件: " .. file_path) os.exit(1) end
+        
+        local content = ""
+        -- [VFS 拦截]：优先从全局虚拟内存文件系统中读取！
+        if _G.L2C_VFS and _G.L2C_VFS[file_path] then
+            content = _G.L2C_VFS[file_path]
+            print(" 内存 VFS 展开合并: " .. file_path)
+        else
+            -- VFS 里没有（比如用户写的本地业务文件），再降级去读硬盘
+            local f = io.open(file_path, "r")
+            if not f then print(" 致命错误: 找不到导入文件: " .. file_path) os.exit(1) end
+            content = f:read("*a")
+            f:close()
+            print(" 物理硬盘展开合并: " .. file_path)
+        end
         
         local orig_line = 1
-        for line in f:lines() do
+        -- 确保末尾有换行符，防正则漏掉最后一行
+        if content:sub(-1) ~= "\n" then content = content .. "\n" end
+        
+        -- 核心魔法：用正则模拟 f:lines()，完美兼容 Windows(\r\n) 和 Unix(\n) 换行！
+        for line in content:gmatch("([^\r\n]*)\r?\n") do
             -- [L2C IDE 隐身衣]：遇到给 VSCode 看的类型声明库，直接在物理域抹除！
             if line:match('require%s*%(?%s*["\']l2c%.d["\']%s*%)?') then
                 -- Do nothing (相当于跳过)
@@ -67,7 +83,6 @@ function M.bundle(input_file)
             end
             orig_line = orig_line + 1
         end
-        f:close()
     end
 
     read_and_bundle(input_file)

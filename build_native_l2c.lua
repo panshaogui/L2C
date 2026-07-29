@@ -14,10 +14,19 @@ local function get_files(dir)
     return files
 end
 
+-- 搜索 Teal 源码的函数
+local function get_tl_files(dir)
+    local p = io.popen('find "'..dir..'" -type f -name "*.tl" 2>/dev/null')
+    local files = {}
+    if p then for file in p:lines() do table.insert(files, file) end p:close() end
+    return files
+end
+
 print("==================================================")
 print(" 1. 正在提取 L2C 核心引擎与器官并焊入 Preload 矩阵...")
 print("==================================================")
-local bundled_code = ""
+
+local bundled_code = "L2C_VFS = {}\n" -- 初始化虚拟文件系统
 
 --  [自依赖降维打击]：自动在当前系统中寻找 tl 和 inspect 的源码物理位置，生吞它们！
 local function bundle_vendor(mod_name)
@@ -51,6 +60,26 @@ for _, path in ipairs(files) do
         bundled_code = bundled_code .. string.format("package.preload['%s'] = package.preload['%s']\n", short_name, mod_name)
     end
     print(" -> 已物理封印器官: " .. mod_name)
+end
+
+local cli_files = get_files("l2c_cli")
+for _, path in ipairs(cli_files) do
+    local mod_name = path:gsub("^%./", ""):gsub("/", "."):gsub("%.lua$", "")
+    local f = io.open(path, "r")
+    local code = f:read("*a")
+    f:close()
+    bundled_code = bundled_code .. string.format("package.preload['%s'] = function()\n%s\nend\n", mod_name, code)
+    print(" -> 已物理封印 L2C CLI: " .. mod_name)
+end
+
+local std_files = get_tl_files("std")
+for _, path in ipairs(std_files) do
+    local f = io.open(path, "r")
+    local code = f:read("*a")
+    f:close()
+    -- 使用 %q 安全转义所有换行、引号等特殊字符，存入 L2C_VFS 内存表！
+    bundled_code = bundled_code .. string.format("L2C_VFS['%s'] = %q\n", path, code)
+    print(" -> 已物理封印 STD 库 (VFS): " .. path)
 end
 
 -- 封印主入口
