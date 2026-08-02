@@ -19,7 +19,12 @@ function M.build_nelua(bundled_code, deps, input_file)
         if #result.syntax_errors > 0 then
             print("   ->  致命语法错误 (Syntax Errors):")
             for _, err in ipairs(result.syntax_errors) do 
-                local loc = (err.y and err.x) and string.format("[行 %d, 列 %d]", err.y, err.x) or ""
+                -- 核心修复：通过 Source Map 逆向追溯真实物理文件与行号
+                local bundle_y = err.y or 0
+                local real_loc = deps.line_map and deps.line_map[bundle_y]
+                local file_str = real_loc and real_loc.file or "unknown"
+                local line_str = real_loc and real_loc.line or bundle_y
+                local loc = string.format("[%s | 行 %s, 列 %s]", file_str, line_str, err.x or "?")
                 print("      " .. loc .. " " .. err.msg) 
             end
         end
@@ -27,7 +32,11 @@ function M.build_nelua(bundled_code, deps, input_file)
         if #result.type_errors > 0 then
             print("   ->  强类型约束违规 (Type Errors):")
             for _, err in ipairs(result.type_errors) do 
-                local loc = (err.y and err.x) and string.format("[行 %d, 列 %d]", err.y, err.x) or ""
+                local bundle_y = err.y or 0
+                local real_loc = deps.line_map and deps.line_map[bundle_y]
+                local file_str = real_loc and real_loc.file or "unknown"
+                local line_str = real_loc and real_loc.line or bundle_y
+                local loc = string.format("[%s | 行 %s, 列 %s]", file_str, line_str, err.x or "?")
                 print("      " .. loc .. " " .. err.msg) 
             end
         end

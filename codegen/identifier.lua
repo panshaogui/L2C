@@ -7,27 +7,11 @@ local M = {}
 
 --  [正规军闭环]：转译变量节点，精准降维打击 FFI 空间的游民符号
 function M:gen_variable(node)
-    -- 如果变量标记是大写 C，直接优雅归化为小写 c，打通 FFI 伪命名空间
-    --  拦截所有 C_ 开头或纯 C 的伪命名空间，降维至小写 c
-    if node.tk == "C" or node.tk:match("^C_") then
-        return "c"
-    end
-    
-    -- 正常的其他所有业务变量（如 tick, bid_qty），原封不动返回原文
     return node.tk
 end
 
 function M:gen_identifier(node)
-    local name = node.tk
-
-    --  [类型安全检查]：检查当前节点的 typeid 是否记录在我们的 FFI 白皮书中
-    if node.typeid and self.ffi_typeids and self.ffi_typeids[node.typeid] then
-        -- 如果命中，优雅映射为 Nelua 的原生伪命名空间 c
-        return "c"
-    end
-    
-    -- 正常业务变量，安全过闸
-    return name
+    return node.tk
 end
 
 --  [物理闭环]：转译函数参数节点 (变量名: 类型)

@@ -1,26 +1,30 @@
 -- examples/19_pico_blinky.tl
--- 物理合并底层驱动
 -- @l2c_import: std/pico.tl
--- @l2c_import: std/freertos.tl
 
--- 这是一个纯正的硬实时任务，由 FreeRTOS 调度
-local function led_task(_param: any)
-    C_PICO.gpio_init(25)              -- Pico 板载 LED 对应的引脚是 25
-    C_PICO.gpio_set_dir(25, PICO_GPIO_OUT) 
+-- 1. 🔥【Pico 救命第一行】必须初始化 Pico 标准库（硬件 UART / USB 以及外设时钟）
+C_PICO.stdio_init_all()
+
+print("🚀 L2C Pico 裸机内核已苏醒！准备接管 RP2040 物理引脚...")
+
+-- 2. Pico 板载 LED 引脚为 GP25
+local LED_PIN = 25
+C_PICO.gpio_init(LED_PIN)
+C_PICO.gpio_set_dir(LED_PIN, PICO_GPIO_OUT)
+
+local current_level = 0
+
+-- 3. 裸机死循环闪烁
+while true do
+    current_level = 1 - current_level
+    C_PICO.gpio_put(LED_PIN, current_level)
     
-    while true do
-        C_PICO.gpio_put(25, 1)        -- 灯亮
-        freertos_delay_ms(500)        -- 硬件级休眠 500ms，交出 CPU 控制权
-        C_PICO.gpio_put(25, 0)        -- 灯灭
-        freertos_delay_ms(500)
+    if current_level == 1 then
+        print("💡 [Pico 裸机] LED 点亮 (GP25 -> 1)")
+    else
+        print("🌙 [Pico 裸机] LED 熄灭 (GP25 -> 0)")
     end
+    
+    -- 使用 Pico 专属的高精度微秒休眠 (500ms = 500000us)
+    C_PICO.sleep_us(500000)
 end
 
--- 初始化硬件串口打印功能
-C_PICO.stdio_init_all()
-print("🚀 L2C FreeRTOS 内核启动, 准备点亮边缘世界！")
-
--- 注册任务并启动操作系统的抢占式内核
--- 🔥 降维打击：在传参的瞬间，用 L2C_FuncPtr 把 Teal 局部函数强转为 C 物理指针！
-freertos_create_task("BlinkyTask", L2C_FuncPtr(led_task))
-C_FREERTOS.vTaskStartScheduler()

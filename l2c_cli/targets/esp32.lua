@@ -6,7 +6,7 @@
 local M = {}
 function M.execute(tmp_file, output_bin)
     local out_c_file = output_bin .. ".c"
-    print("🔬 [L2C ESP32 靶向] 正在提取并物理扭曲入口架构...")
+    print(" [L2C ESP32 靶向] 正在提取并物理扭曲入口架构...")
     if os.execute(string.format("nelua --print-code %s > %s", tmp_file, out_c_file)) == 0 or true then
         local fc = io.open(out_c_file, "r")
         local c_src = fc:read("*a")
@@ -18,7 +18,7 @@ function M.execute(tmp_file, output_bin)
         -- 顺便自动补齐 argc 和 argv 防止内部变量报错！
         c_src = c_src:gsub("int main%(int argc, char%*%* argv%) %{", "void app_main(void) {\n  int argc = 0;\n  char** argv = (char**)0;\n")
         
-        -- 3. 🔪 刮骨疗毒：抹掉 app_main 内部不合规的 return 返回值！
+        -- 3. 刮骨疗毒：抹掉 app_main 内部不合规的 return 返回值！
         -- 把 "return nelua_main(argc, argv);" 强行扭曲为 "nelua_main(argc, argv);"
         c_src = c_src:gsub("return%s+nelua_main%(argc,%s*argv%);", "nelua_main(argc, argv);")
         

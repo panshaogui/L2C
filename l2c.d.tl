@@ -59,6 +59,9 @@ global L2C_Memory_Barrier: function()
 --- @param ptr 物理内存指针。
 global L2C_PtrAsInt: function(ptr: any): integer
 
+--- 🔨 **【数据降维】** 突破强类型限制，将浮点数 (number) 强转为等宽整数 (integer)，直接截断小数部分。
+--- @param n 浮点数。
+global L2C_NumberToInt: function(n: number): integer
 
 -- ==========================================
 -- 🫀 2. SPSC 无锁环形队列 (std/spsc.tl)
@@ -180,19 +183,19 @@ global Multicore_Launch: function(task_func: any)
 -- 🕸️ 6. HFT 高频网络与消息队列 (ZMQ, Nanomsg)
 -- ==========================================
 
-global type zmq_context = record end
-global type zmq_socket = record end
+global type zmq_context_t = record end
+global type zmq_socket_t = record end
 
 global type C_ZMQ_TYPE = record
     --- 🕸️ **【ZMQ】** 初始化并获取 0-MQ 极速上下文。
-    zmq_ctx_new: function(): zmq_context
+    zmq_ctx_new: function(): zmq_context_t
     --- 🕸️ **【ZMQ】** 创建指定模式的 Socket (如 PUB/SUB, REQ/REP)。
-    zmq_socket: function(ctx: zmq_context, type: integer): zmq_socket
+    zmq_socket: function(ctx: zmq_context_t, type: integer): zmq_socket_t
     --- 🕸️ **【ZMQ】** 建立底层的 TCP/IPC 连接。
-    zmq_connect: function(sk: zmq_socket, endpoint: string): integer
-    zmq_setsockopt: function(sk: zmq_socket, option: integer, optval: any, optvallen: integer): integer
+    zmq_connect: function(sk: zmq_socket_t, endpoint: string): integer
+    zmq_setsockopt: function(sk: zmq_socket_t, option: integer, optval: any, optvallen: integer): integer
     --- 🕸️ **【ZMQ 零拷贝】** 直接将网络字节流覆盖到 L2C 物理 Buffer 中！
-    zmq_recv: function(sk: zmq_socket, buf: any, len: integer, flags: integer): integer
+    zmq_recv: function(sk: zmq_socket_t, buf: any, len: integer, flags: integer): integer
 end
 
 --- 🕸️ **【ZMQ】** 高频交易最爱的 ZeroMQ 底层 C 绑定库。

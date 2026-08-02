@@ -36,6 +36,9 @@ function M.bundle(input_file)
         local function L2C_Spinlock_Unlock(lock_id: integer) end
         local function L2C_Memory_Barrier() end
         local function L2C_PtrAsInt(ptr: any): integer end
+        local function L2C_NumberToInt(n: number): integer end
+        local function L2C_ReadArray(arr_ptr: integer, idx: integer): integer end
+        local function L2C_WriteArray(arr_ptr: integer, idx: integer, val: integer) end
     ]]
 
     -- 1. 注入内建宏，标记其来自 <L2C_Intrinsics>

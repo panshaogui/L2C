@@ -8,11 +8,9 @@ local mock_self = {
 }
 
 -- 1. 测试 gen_variable 拦截大写 C
-assert(ident.gen_variable(mock_self, { tk = "C" }) == "c", "gen_variable 漏掉了 FFI 降维打击")
 assert(ident.gen_variable(mock_self, { tk = "tick" }) == "tick", "普通变量被误杀")
 
 -- 2. 测试 gen_identifier 的 typeid FFI 白名单检验
-assert(ident.gen_identifier(mock_self, { tk = "C", typeid = 999 }) == "c", "gen_identifier 漏掉了白皮书验证")
 assert(ident.gen_identifier(mock_self, { tk = "Normal", typeid = 123 }) == "Normal", "普通标识符被误杀")
 
 -- 3. 测试参数强类型生成

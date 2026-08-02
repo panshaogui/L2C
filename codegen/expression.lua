@@ -45,6 +45,33 @@ function M:gen_op(node)
             return "(@integer)((@usize)(" .. self:gen(node.e2[1]) .. "))"
         end
 
+        -- [类型碾压] 将浮点数强制转为系统等宽整数
+        if func_node.kind == "variable" and func_node.tk == "L2C_NumberToInt" then
+            return "(@integer)(" .. self:gen(node.e2[1]) .. ")"
+        end
+
+        -- [物理切片器] 直接映射为兵工厂里的 C 语言原生内联数组指针读写
+        if func_node.kind == "variable" and func_node.tk == "L2C_ReadArray" then
+            return "l2c_spsc_read_arr(" .. self:gen(node.e2) .. ")"
+        end
+        
+        if func_node.kind == "variable" and func_node.tk == "L2C_WriteArray" then
+            return "l2c_spsc_write_arr(" .. self:gen(node.e2) .. ")"
+        end
+
+        -- [0-GC 物理栈内存] 强制展开为 C 语言 VLA 定长栈数组！绝对安全，离开作用域瞬间释放！
+        if func_node.kind == "variable" and func_node.tk == "L2C_Buffer" then
+            return "(@[" .. self:gen(node.e2[1]) .. "]byte)()"
+        end
+
+        if func_node.kind == "variable" and func_node.tk == "L2C_IntegerArray" then
+            return "(@[" .. self:gen(node.e2[1]) .. "]integer)()"
+        end
+
+        if func_node.kind == "variable" and func_node.tk == "L2C_NumberArray" then
+            return "(@[" .. self:gen(node.e2[1]) .. "]number)()"
+        end
+
         -- [C FFI 内存宏]：静态持久化内存分配 (L2C_Static)
         if func_node.kind == "variable" and func_node.tk == "L2C_Static" then
             local type_node = node.e2[1]
@@ -69,21 +96,10 @@ function M:gen_op(node)
             return string.format("(@*%s)(%s)", type_name, ptr_exp)
         end
 
-        --[[  [前提二：物理级自旋锁 API 映射]
-
-        if func_node.kind == "variable" and func_node.tk == "L2C_Spinlock_Lock" then
-            return "L2C_SPINLOCK_LOCK(" .. self:gen(node.e2[1]) .. ")"
-        end
-        if func_node.kind == "variable" and func_node.tk == "L2C_Spinlock_Unlock" then
-            return "L2C_SPINLOCK_UNLOCK(" .. self:gen(node.e2[1]) .. ")"
+        if func_node.kind == "op" and func_node.op.op == "." and func_node.e2.tk == "_ptr" then
+            return "nilptr"
         end
 
-        if func_node.kind == "variable" and func_node.tk == "L2C_Memory_Barrier" then
-            return "l2c_memory_barrier()"
-        end
-
-        --]]
-  
         --  [硬核手术二：防御性内联展开]
         if func_node.kind == "op" and func_node.op.op == "." and func_node.e2.tk == "_new" then
             local type_name = func_node.e1.tk
@@ -134,6 +150,12 @@ function M:gen_op(node)
         -- [L2C 深度语义熔断]：封杀动态字符串库
         if left == "string" then
             self:panic("E005", node)
+        end
+
+        -- [C FFI 降维打击]：自动将 C_XXX.func 转换为 C 语言的原生全局 func()！
+        -- 这让我们在 Teal 里享受 OOP 提示，在 C 里享受零开销全局内联！
+        if left == "C" or left:match("^C_") then
+            return right
         end
 
         return left .. "." .. right
