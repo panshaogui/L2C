@@ -31,12 +31,6 @@ function M:gen_local_type(node)
         if not def or def.typename ~= "record" then return "" end
         
         local out = {}
-        --  [防连环雷]：确保在多文件物理拼接时，只生成一次 c 记录的全局外壳！
-        if not self.c_namespace_emitted then
-            table.insert(out, "global c = @record{}")
-            self.c_namespace_emitted = true
-        end
-
         for _, func_name in ipairs(def.field_order or {}) do
             local func_info = def.fields[func_name]
             if func_info and func_info.typename == "function" then
@@ -46,10 +40,10 @@ function M:gen_local_type(node)
                         local t_name = arg.typename or "any"
                         if t_name == "string" then t_name = "cstring" end
                         
-                        -- ⚡ [内存降维]：Teal 里的 any，在 C 语言 FFI 里就是纯正的 void*（Nelua 叫 pointer）
+                        -- [内存降维]：Teal 里的 any，在 C 语言 FFI 里就是纯正的 void*（Nelua 叫 pointer）
                         if t_name == "any" then t_name = "pointer" end
                         
-                        -- ⚡ [核心修复]：如果是 nominal 自定义类型，拔出它藏在 names 数组里的真名！
+                        -- [核心修复]：如果是 nominal 自定义类型，拔出它藏在 names 数组里的真名！
                         if t_name == "nominal" and arg.names and arg.names[1] then
                             t_name = arg.names[1]
                         end
@@ -64,18 +58,19 @@ function M:gen_local_type(node)
                     ret_type = ret_node.typename or "void"
                     if ret_type == "string" then ret_type = "cstring" end
                     
-                    -- ⚡ [内存降维]：返回值如果是 any，同样映射为 void* (pointer)
+                    -- [内存降维]：返回值如果是 any，同样映射为 void* (pointer)
                     if ret_type == "any" then ret_type = "pointer" end
                     
-                    -- ⚡ [核心修复]：返回值同样剥离 nominal 伪装
+                    -- [核心修复]：返回值同样剥离 nominal 伪装
                     if ret_type == "nominal" and ret_node.names and ret_node.names[1] then
                         ret_type = ret_node.names[1]
                     end
                 end
                 
-                -- ⚡ [终极保障]：注入 cimport('%s') 锁定 C 原生符号
+                -- [核心架构统一]：生成绝对扁平的 C 函数映射！完美对接 expression.lua 中的裸调用！
+                -- 示例生成：local function gpio_put(arg1: integer, arg2: integer): void <cimport('gpio_put'), nodecl> end
                 local c_decl = string.format(
-                    "function c.%s(%s): %s <cimport('%s'), nodecl> end", 
+                    "local function %s(%s): %s <cimport('%s'), nodecl> end", 
                     func_name, 
                     table.concat(args_out, ", "), 
                     ret_type,
@@ -133,30 +128,6 @@ function M:gen_local_declaration(node)
         return "-- L2C: Stripped Teal _tl_compat polyfill"
     end
     
-    local exp = node.exps and node.exps[1]
-    if exp and exp.kind == "op" and exp.op.op == "@funcall" then
-        -- 宏 1：字节缓冲
-        if exp.e1.tk == "L2C_Buffer" then
-            local size = self:gen(exp.e2[1])
-            return string.format("local %s: [%s]byte", var_name, size)
-        end
-        --  宏 2：强类型定长数字栈数组
-        if exp.e1.tk == "L2C_NumberArray" then
-            local size = self:gen(exp.e2[1])
-            return string.format("local %s: [%s]number", var_name, size)
-        end
-        --  宏 3：强类型定长整数栈数组
-        if exp.e1.tk == "L2C_IntegerArray" then
-            local size = self:gen(exp.e2[1])
-            return string.format("local %s: [%s]integer", var_name, size)
-        end
-        --  [OOP 魔法宏]：拦截 Type._ptr()，在 C 栈上强制声明未初始化的 void* 物理指针！
-        local fnode = exp.e1
-        if fnode.kind == "op" and fnode.op.op == "." and fnode.e2.tk == "_ptr" then
-            return string.format("local %s: pointer", var_name)
-        end
-    end
-    
     --  [安全兜底] 如果没有赋值表达式，绝不生成带 "=" 的乱码
     if exps_str == "" then
         return string.format("local %s", var_name)
@@ -164,7 +135,6 @@ function M:gen_local_declaration(node)
         return string.format("local %s = %s", var_name, exps_str)
     end
     
-    -- return string.format("local %s = %s", var_name, exps_str)
 end
 
 -- 映射 2：函数声明（修复 UNKNOWN bug）

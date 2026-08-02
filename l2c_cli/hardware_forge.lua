@@ -27,13 +27,55 @@ function M.sniff_and_forge(bundled_code)
             #ifndef L2C_SPINLOCK_DEFINED
             #define L2C_SPINLOCK_DEFINED
             #include "hardware/sync.h"
+            #include "hardware/dma.h"
+            #include "hardware/irq.h"
+
             static inline void l2c_spinlock_lock(int id) { spin_lock_unsafe_blocking(spin_lock_instance((uint32_t)(id & 31))); }
             static inline void l2c_spinlock_unlock(int id) { spin_unlock_unsafe(spin_lock_instance((uint32_t)(id & 31))); }
             static inline void l2c_launch_core1(void* func_ptr) { multicore_launch_core1((void (*)(void))func_ptr); }
+
+            // [DMA 硬件泵引擎]：死死锁定 8000Hz 时钟，建立 DREQ 物理握手！
+            static inline void l2c_pico_adc_dma_start(int dma_chan, uintptr_t buf_ptr, int sample_count, void* isr_func) {
+                adc_init();
+                adc_gpio_init(26);
+                adc_select_input(0);
+                adc_fifo_setup(true, false, 1, false, false);
+                // 修复核心：第二个参数改为 true！激活 ADC 向 DMA 发送数据请求 (DREQ)！
+                adc_fifo_setup(true, true, 1, false, false);
+                adc_set_clkdiv(5999); // 48MHz / 8000Hz = 6000 (分频器填 6000-1)
+
+                dma_channel_config c = dma_channel_get_default_config(dma_chan);
+                channel_config_set_transfer_data_size(&c, DMA_SIZE_16); // ADC 读出是 12bit，占 16bit 空间
+                channel_config_set_read_increment(&c, false);
+                channel_config_set_write_increment(&c, true);
+                channel_config_set_dreq(&c, DREQ_ADC); // DREQ 握手：每采样一个点，通知 DMA 搬运一次！
+
+                dma_channel_configure(dma_chan, &c, (void*)buf_ptr, &adc_hw->fifo, sample_count, false);
+
+                // 挂载硬件中断
+                irq_set_exclusive_handler(DMA_IRQ_0, (irq_handler_t)isr_func);
+                irq_set_enabled(DMA_IRQ_0, true);
+                dma_channel_set_irq0_enabled(dma_chan, true);
+                dma_channel_start(dma_chan);
+                adc_run(true);
+            }
+            
+            // 新增利器：专门用于读取 DMA 紧凑打包的 16位 (uint16_t) 物理内存！
+            static inline int l2c_read_adc_buf16(uintptr_t arr_ptr, int idx) { 
+                return ((uint16_t*)(void*)arr_ptr)[idx]; 
+            }
+
+            // [DMA 引擎重置]：在中断中调用，清空中断标志并开启下一轮搬运
+            static inline void l2c_pico_dma_irq_clear_and_restart(int dma_chan, uintptr_t buf_ptr) {
+                dma_hw->ints0 = 1u << dma_chan; // 清除中断标志
+                dma_channel_set_write_addr(dma_chan, (void*)buf_ptr, true); // 重新给定写地址并触发
+            }
+
             #define L2C_SPINLOCK_LOCK(id)   l2c_spinlock_lock(id)
             #define L2C_SPINLOCK_UNLOCK(id) l2c_spinlock_unlock(id)
             #endif
         ]]
+        
         print("  [L2C 兵工厂] Pico 靶向，物理双核与自旋锁已就绪！")
     elseif bundled_code:match("std/esp32%.tl") or bundled_code:match("std/freertos%.tl") then
         cfg.arena_size = "16 * 1024"

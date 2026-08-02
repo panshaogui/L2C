@@ -33,8 +33,9 @@ target_include_directories(firmware PRIVATE
 
 # 5. 链接 Pico 基础硬件库（GPIO、串口等）
 target_link_libraries(firmware pico_stdlib)
-# 🔥 核心修复：在这里追加 hardware_adc 模块，打通 ADC 头文件与底层驱动！
-target_link_libraries(firmware pico_stdlib hardware_adc)
+
+# 核心修复：在这里追加 hardware_adc 模块，打通 ADC 头文件与底层驱动！
+target_link_libraries(firmware pico_stdlib pico_multicore hardware_adc hardware_dma hardware_irq)
 
 target_compile_options(firmware PRIVATE
     -mcpu=cortex-m0plus

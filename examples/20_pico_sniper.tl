@@ -1,156 +1,186 @@
--- examples/20_pico_sniper.tl
+-- ==============================================================================
+-- examples/20_pico_sniper_dma.tl
+-- 终极边缘声纹刺客：DMA 硬件泵 -> 无锁流水线 -> Core 1 Q15 DSP 大脑 -> 继电器
+-- ==============================================================================
+
 -- @l2c_import: std/pico.tl
--- @l2c_import: std/freertos.tl
+-- @l2c_import: std/multicore.tl
+-- @l2c_import: std/ringbuffer.tl
 -- @l2c_import: std/dsp.tl
 
-local function sniper_task(_param: any)
-    -- 1. 硬件引脚初始化
-    C_PICO.gpio_init(14) -- 继电器1: 收竿 (F键)
-    C_PICO.gpio_set_dir(14, PICO_GPIO_OUT)
-    C_PICO.gpio_put(14, 1) -- 默认拉高断开
+local function delay_ms(ms: integer)
+    C_PICO.sleep_us(ms * 1000)
+end
+
+-- 🛡️ 单例屏障：确保全局物理内存绝对唯一
+local function Get_SharedQueue(): SPSC_Queue
+    return SPSC_Queue._cast(L2C_Static("SPSC_Queue"))
+end
+
+local function Get_DMABuffer(): integer
+    -- 向底层勒索 256 个整数的连续物理内存，转化为整数指针
+    return L2C_PtrAsInt(L2C_Static("[256]integer"))
+end
+
+-- ============================================================================
+-- ⚡ 硬件中断服务程序 (ISR)
+-- 警告：运行在芯片最底层的 IRQ 上下文！绝对禁止延时、闭包和打印！
+-- ============================================================================
+local function dma_isr_handler()
+    local q = Get_SharedQueue()
+    local buf_ptr = Get_DMABuffer()
     
-    C_PICO.gpio_init(15) -- 继电器2: 抛竿 (3键)
-    C_PICO.gpio_set_dir(15, PICO_GPIO_OUT)
-    C_PICO.gpio_put(15, 1) -- 默认拉高断开
+    -- ⚡ 修复核心：使用 16 位专属物理探针读取 DMA 紧凑写入的数据！
+    for i = 0, 255 do
+        local val = C_PICO.l2c_read_adc_buf16(buf_ptr, i)
+        SPSC_Push(q, val)
+    end
     
-    -- 麦克风接在 ADC0 (物理引脚 GP26)
-    C_PICO.adc_init()
-    C_PICO.adc_gpio_init(26)
-    C_PICO.adc_select_input(0)
+    -- 🚀 极简物理传参：直接传入 integer
+    C_PICO.l2c_pico_dma_irq_clear_and_restart(0, buf_ptr)
+end
+
+-- ============================================================================
+-- 🧠 副核 (Core 1) 任务：Q15 DSP 大脑与状态机
+-- ============================================================================
+local function sniper_brain_task()
+    local q = Get_SharedQueue()
+    local out = IntBox._new() -- 0-GC 装箱指针
     
-    -- 2. 核心内存强开 (栈内存，绝对 0-GC)
+    -- 申请专属的 Core 1 DSP 计算缓冲物理内存
+    local dsp_buf = L2C_PtrAsInt(L2C_Static("[256]integer"))
     local CHUNK_SIZE = 256
-    local raw_signal = L2C_NumberArray(256)
-    
-    -- 3. Goertzel 系数预处理 (8000Hz 采样率，256点)
-    local COEFF_800HZ = 1.605473    -- 800Hz
-    local COEFF_3000HZ = -1.414213  -- 3000Hz
-    
-    -- 4. 闭环状态机定义
-    local STATE_COOLDOWN   = 0  -- 冷却防抖
-    local STATE_CASTING    = 1  -- 执行抛竿
-    local STATE_VERIFYING  = 2  -- 过筛校验 (1.5s)
-    local STATE_WAIT_FISH  = 3  -- 安稳等鱼 (最大23s)
-    local STATE_CATCHING   = 4  -- 执行收竿
-    
+
+    -- 初始化电磁铁继电器
+    C_PICO.gpio_init(14) C_PICO.gpio_set_dir(14, PICO_GPIO_OUT) C_PICO.gpio_put(14, 1) -- 收竿
+    C_PICO.gpio_init(15) C_PICO.gpio_set_dir(15, PICO_GPIO_OUT) C_PICO.gpio_put(15, 1) -- 抛竿
+
+    -- Q15 定点数系数 (精确无溢出)
+    local COEFF_800HZ_Q15 = 53020
+    local COEFF_3000HZ_Q15 = -46341
+
+    local STATE_COOLDOWN   = 0
+    local STATE_CASTING    = 1
+    local STATE_VERIFYING  = 2
+    local STATE_WAIT_FISH  = 3
+    local STATE_CATCHING   = 4
+
     local current_state = STATE_COOLDOWN
     local state_timer_ms = 0
     local cast_timer_ms = 0
-    local cooldown_duration_ms = 2000 -- 开局等2秒启动
+    local cooldown_duration_ms = 2000
 
-    print("🚀 L2C 硅片雷达点火！[动态防卡死 + 继电器直控] 终极闭环启动...")
+    print("🚀 [Core 1 大脑] Q15 DSP 狙击手已就位，开启监听...")
     
     while true do
-        -- ⏱️ 物理锁频计时器：每次循环必定耗时 42ms
-        local LOOP_MS = 42
-        state_timer_ms = state_timer_ms + LOOP_MS
-        cast_timer_ms = cast_timer_ms + LOOP_MS
-
-        -- ============================================
-        -- 【状态 0】：冷却防抖期
-        -- ============================================
         if current_state == STATE_COOLDOWN then
+            -- 冷却期直接排空队列，休眠省电
+            while SPSC_Pop(q, out) do end
+            delay_ms(10)
+            state_timer_ms = state_timer_ms + 10
+            
             if state_timer_ms >= cooldown_duration_ms then
-                print("\n========================================")
-                print("✅ 冷却完毕，开启新一轮循环！")
+                print("✅ 冷却完毕，执行抛竿！")
                 current_state = STATE_CASTING
             end
 
-        -- ============================================
-        -- 【状态 1】：执行抛竿动作
-        -- ============================================
         elseif current_state == STATE_CASTING then
-            print("🎣 [动作] 电磁铁重击 3 号键 (抛竿/空竿重开)!")
-            C_PICO.gpio_put(15, 0)
-            freertos_delay_ms(120)
-            C_PICO.gpio_put(15, 1)
-            
+            C_PICO.gpio_put(15, 0) delay_ms(120) C_PICO.gpio_put(15, 1)
             state_timer_ms = 0
             cast_timer_ms = 0
+            
+            -- 瞬间排空抛竿带来的机械噪音
+            while SPSC_Pop(q, out) do end
             current_state = STATE_VERIFYING
-            print("🔍 进入 1.5 秒过筛区，监听 WA 退货警告 (800Hz)...")
+            print("🔍 抛竿完成！监听 800Hz 退货警告...")
 
-        -- ============================================
-        -- 【状态 2/3】：频域监听雷达 (800Hz 或 3000Hz)
-        -- ============================================
         elseif current_state == STATE_VERIFYING or current_state == STATE_WAIT_FISH then
             
-            -- 🟢 过筛晋升判定
+            -- 🟢 阻塞式汲取 256 个点 (精确耗时 32ms，绝对的物理时钟锚点！)
+            local count = 0
+            while count < CHUNK_SIZE do
+                if SPSC_Pop(q, out) then
+                    L2C_WriteArray(dsp_buf, count, out.val)
+                    count = count + 1
+                end
+            end
+            
+            state_timer_ms = state_timer_ms + 32
+            cast_timer_ms = cast_timer_ms + 32
+            
             if current_state == STATE_VERIFYING and state_timer_ms >= 1500 then
-                print("🟢 1.5秒验货通过，未听到退货音！进入安稳等鱼状态...")
+                print("🟢 1.5秒验货通过！安稳等鱼...")
                 current_state = STATE_WAIT_FISH
             end
             
-            -- 🚨 【核心防卡死锁】 23 秒熔断保护！
             if current_state == STATE_WAIT_FISH and cast_timer_ms >= 23000 then
-                print("⚠️ [熔断保护] 23秒死等超时！未见中鱼信号！")
-                print("🛑 判定为死鱼、卡视野或漏帧！引导进入常规重抛流程...")
+                print("⚠️ [熔断] 23秒无鱼！重抛！")
                 cooldown_duration_ms = 1500
                 state_timer_ms = 0
                 current_state = STATE_COOLDOWN
             else
-                -- 没有超时，正常采集音频
-                local sum = 0.0
-                for i = 1, CHUNK_SIZE do
-                    local val = C_PICO.adc_read()
-                    raw_signal[i] = val
-                    sum = sum + val
-                    C_PICO.sleep_us(123) 
+                -- 🧮 Q15 定点数 DSP 极限运算
+                local sum = 0
+                for i = 0, CHUNK_SIZE - 1 do sum = sum + L2C_ReadArray(dsp_buf, i) end
+                local mean = sum // CHUNK_SIZE
+                
+                local variance_sum = 0
+                for i = 0, CHUNK_SIZE - 1 do
+                    local v = L2C_ReadArray(dsp_buf, i) - mean
+                    L2C_WriteArray(dsp_buf, i, v)
+                    variance_sum = variance_sum + (v * v)
                 end
+                -- 去除放大倍数后的伪方差
+                local v_std = variance_sum // CHUNK_SIZE 
                 
-                local v_mean = sum / 256.0
-                local variance_sum = 0.0
-                for i = 1, CHUNK_SIZE do
-                    raw_signal[i] = raw_signal[i] - v_mean
-                    variance_sum = variance_sum + (raw_signal[i] * raw_signal[i])
-                end
-                
-                local v_std = variance_sum / 256.0 
-                
-                -- 只要有足够响的声音
-                if v_std > 9000000.0 then
-                    local power_cast = dsp_goertzel_mag(raw_signal, COEFF_800HZ, 256)
-                    local power_fish = 0.0
+                -- 动态阈值判定 (由于是 12bit ADC 的方差，您可根据真实环境调试)
+                if v_std > 5000 then
+                    local power_800 = dsp_goertzel_mag_q15(dsp_buf, COEFF_800HZ_Q15, 256)
+                    local power_3000 = dsp_goertzel_mag_q15(dsp_buf, COEFF_3000HZ_Q15, 256)
                     
-                    if v_std > 25000000.0 then
-                        power_fish = dsp_goertzel_mag(raw_signal, COEFF_3000HZ, 256)
-                    end
-                    
-                    local total_energy = power_cast + power_fish + 1.0
-                    local ratio_fish = power_fish / total_energy
-                    local ratio_cast = power_cast / total_energy
-                    
-                    if current_state == STATE_VERIFYING and ratio_cast > 0.6 and ratio_cast > ratio_fish then
-                        print("🔴 [退货警告] 抓到 800Hz 纯音！抛远了！强制切断，立刻重抛！")
+                    if current_state == STATE_VERIFYING and power_800 > power_3000 * 10 then
+                        print("🔴 [退货警告] 800Hz 纯音！抛偏，重抛！")
                         current_state = STATE_CASTING
-                    elseif current_state == STATE_WAIT_FISH and ratio_fish > 0.6 and ratio_fish > ratio_cast then
-                        print("🎯 [完美中鱼] 抓到 3000Hz 纯音！能量暴涨，收网！")
+                    elseif current_state == STATE_WAIT_FISH and power_3000 > power_800 * 10 then
+                        print("🎯 [完美中鱼] 3000Hz 纯音！收网！")
                         current_state = STATE_CATCHING
                     end
                 end
             end
 
-        -- ============================================
-        -- 【状态 4】：执行收竿动作
-        -- ============================================
         elseif current_state == STATE_CATCHING then
-            print("💥 [动作] 电磁铁重击 F 键 (收网)!")
-            C_PICO.gpio_put(14, 0)
-            freertos_delay_ms(120)
-            C_PICO.gpio_put(14, 1)
-            
-            print("⏳ 鱼已入包！进入 5 秒整理防抖期...")
+            C_PICO.gpio_put(14, 0) delay_ms(120) C_PICO.gpio_put(14, 1)
+            print("⏳ 鱼已入包！休眠防抖...")
             cooldown_duration_ms = 5000
             state_timer_ms = 0
             current_state = STATE_COOLDOWN
         end
-
-        -- 释放 CPU 调度权 (10ms)
-        freertos_delay_ms(10)
     end
 end
 
+-- ============================================================================
+-- 🫀 主核 (Core 0) 任务：全自动 DMA 硬件总线装配
+-- ============================================================================
 C_PICO.stdio_init_all()
-print("🛰️ 准备装载 L2C 全自动狙击任务...")
-freertos_create_task("SniperTask", L2C_FuncPtr(sniper_task))
-freertos_start()
+print("🛰️ [系统] L2C 硬件架构苏醒！")
+
+-- 1. 初始化容量为 1024 的 SPSC 跨核无锁隧道
+local q = Get_SharedQueue()
+local q_buf = L2C_PtrAsInt(L2C_Static("[1024]integer"))
+SPSC_Init(q, 1024, q_buf)
+
+-- 2. 点火！将大脑发射至 Core 1 物理核
+Multicore_Launch(L2C_FuncPtr(sniper_brain_task))
+
+-- 3. 挂载 DMA 硬件泵，移交控制权！
+print("🫀 [Core 0] 正在挂载 DMA 硬件泵，设置 IRQ 中断...")
+local dma_buf = Get_DMABuffer()
+C_PICO.l2c_pico_adc_dma_start(0, dma_buf, 256, L2C_FuncPtr(dma_isr_handler))
+
+print("✅ [Core 0] 硬件泵移交完毕！主 CPU 彻底解放，进入深度休眠维持心跳！")
+
+while true do
+    -- Core 0 没有任何业务逻辑，纯粹作为看门狗心跳存在
+    delay_ms(1000)
+    print("💓 [Core 0] System Heartbeat...")
+end

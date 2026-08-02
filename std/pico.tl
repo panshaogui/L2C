@@ -24,11 +24,11 @@ local type C_PICO = record
     -- 扩容微秒级硬实时休眠（用于死死锁住 8000Hz 采样率）
     sleep_us: function(integer)
 
-    -- 扩容双核引擎与硬件 FIFO 寄存器通信 (纳秒级物理通道)
-    multicore_launch_core1: function(any)
-    multicore_fifo_push_blocking: function(integer)
-    multicore_fifo_pop_blocking: function(): integer
-    get_core_num: function(): integer
+    -- [新增 DMA 硬件泵映射] (全部降维为 integer)
+    -- [DMA 硬件泵与 16 位解包器] 
+    l2c_pico_adc_dma_start: function(integer, integer, integer, any)
+    l2c_pico_dma_irq_clear_and_restart: function(integer, integer)
+    l2c_read_adc_buf16: function(integer, integer): integer
 
 end
 
