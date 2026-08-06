@@ -39,6 +39,19 @@ function M.bundle(input_file)
         local function L2C_NumberToInt(n: number): integer end
         local function L2C_ReadArray(arr_ptr: integer, idx: integer): integer end
         local function L2C_WriteArray(arr_ptr: integer, idx: integer, val: integer) end
+        -- [L2C HLS PIO Intrinsics 硬件状态机魔法签证]
+        local function set(a: any, b?: any) end
+        local function jmp(a: any, b?: any) end
+        local function wait(a: any, b?: any, c?: any) end
+        local function in_(a: any, b?: any) end
+        local function out(a: any, b?: any) end
+        local function push(a?: any, b?: any) end
+        local function pull(a?: any, b?: any) end
+        local function mov(a: any, b?: any) end
+        local function irq(a: any, b?: any) end
+        local function wrap_target() end
+        local function wrap() end
+        
     ]]
 
     -- 1. 注入内建宏，标记其来自 <L2C_Intrinsics>

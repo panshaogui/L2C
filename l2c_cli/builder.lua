@@ -55,6 +55,23 @@ function M.build_nelua(bundled_code, deps, input_file)
     -- 核心修复：把合并后的源码和 Source Map 一起交给编译器大脑！
     local engine = Codegen.new(bundled_code, deps.line_map)
     local nelua_code = engine:gen(result.ast)
+
+    -- [HLS PIO 物理闭环]：如果存在拦截的 PIO 硬件状态机，执行锻造与头文件注入
+    if engine.pio_registry and next(engine.pio_registry) then
+        local pio_out = {}
+        for pio_name, pio_asm in pairs(engine.pio_registry) do
+            table.insert(pio_out, ".program " .. pio_name)
+            table.insert(pio_out, pio_asm)
+            table.insert(pio_out, "\n")
+        end
+        local pio_file = io.open("l2c_hardware.pio", "w")
+        if pio_file then
+            pio_file:write(table.concat(pio_out, "\n"))
+            pio_file:close()
+            -- 强制向 C 宇宙顶部注入 PIO 编译后的头文件
+            nelua_code = "## cinclude 'l2c_hardware.pio.h'\n" .. nelua_code
+        end
+    end
     
     -- 模块配置并组装
     local cfg = Forge.sniff_and_forge(bundled_code)
@@ -67,3 +84,4 @@ function M.build_nelua(bundled_code, deps, input_file)
 end
 
 return M
+

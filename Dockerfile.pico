@@ -2,7 +2,7 @@
 FROM alpine:edge
 
 # =========================================================================
-# 🚀 1. 安装基础工具、CMake、以及 ARM 交叉编译器链条（完全防翻车版）
+# 1. 安装基础工具、CMake、以及 ARM 交叉编译器链条（完全防翻车版）
 # =========================================================================
 RUN apk update && \
     apk add --no-cache \
@@ -12,17 +12,23 @@ RUN apk update && \
     newlib-arm-none-eabi linux-headers
 
 # =========================================================================
-# 📦 2. 部署基础依赖：Pico SDK
+# 2. 部署基础依赖：Pico SDK
 # =========================================================================
 WORKDIR /opt
-# 🔥 核心修复：Pico SDK 严重依赖 tinyusb 等子模块！必须递归浅克隆！
+# 核心修复：Pico SDK 严重依赖 tinyusb 等子模块！必须递归浅克隆！
 RUN git clone --depth=1 -b master --recursive --shallow-submodules https://github.com/raspberrypi/pico-sdk.git /opt/pico-sdk
 
 # 注入 Pico SDK 绝对路径到系统全局变量，供 CMake 自动识别
 ENV PICO_SDK_PATH=/opt/pico-sdk
 
+# 原地编译 pioasm 硬件综合器，并放入全局 PATH！
+RUN mkdir -p /opt/pico-sdk/tools/pioasm/build && \
+cd /opt/pico-sdk/tools/pioasm/build && \
+cmake -DPIOASM_VERSION_STRING="1.5.0" .. && make && \
+cp pioasm /usr/local/bin/
+
 # =========================================================================
-# ⚙️ 3. 部署内核依赖：FreeRTOS 内核
+# 3. 部署内核依赖：FreeRTOS 内核
 # =========================================================================
 RUN git clone --depth=1 -b main --recursive --shallow-submodules https://github.com/FreeRTOS/FreeRTOS-Kernel.git /opt/freertos
 
@@ -30,7 +36,8 @@ RUN git clone --depth=1 -b main --recursive --shallow-submodules https://github.
 ENV FREERTOS_KERNEL_PATH=/opt/freertos
 
 # =========================================================================
-# 🏁 4. 挂载工作目录与执行入口
+# 4. 挂载工作目录与执行入口
 # =========================================================================
 WORKDIR /workspace
 CMD ["/bin/sh"]
+

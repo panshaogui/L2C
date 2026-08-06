@@ -18,13 +18,13 @@
 #define configSUPPORT_DYNAMIC_ALLOCATION        1
 #define configTOTAL_HEAP_SIZE                   (64 * 1024) // 拨 64KB 内存给 RTOS
 
-/* 🔥 必须配置的 Timers 参数，填补之前的漏缺 */
+/* 必须配置的 Timers 参数，填补之前的漏缺 */
 #define configUSE_TIMERS                        1
 #define configTIMER_TASK_PRIORITY               3
 #define configTIMER_QUEUE_LENGTH                10
 #define configTIMER_TASK_STACK_DEPTH            256
 
-/* 🔥 硬件白皮书：明确告诉 FreeRTOS 咱没有 MPU 和 FPU */
+/* 硬件白皮书：明确告诉 FreeRTOS 咱没有 MPU 和 FPU */
 #define configENABLE_MPU                        0
 #define configENABLE_FPU                        0
 #define configENABLE_TRUSTZONE                  0
@@ -43,14 +43,15 @@
 #define xPortSysTickHandler     isr_systick
 
 /* ========================================================================= */
-/* 🔥 L2C 嵌入式绝杀：开启 API 阀门与 Cortex-M0+ 移植层定义 */
+/* L2C 嵌入式绝杀：开启 API 阀门与 Cortex-M0+ 移植层定义 */
 /* ========================================================================= */
 #define INCLUDE_vTaskDelay                    1
 #define INCLUDE_vTaskDelayUntil               1
 #define INCLUDE_vTaskDelete                   1
 #define INCLUDE_vTaskPrioritySet              1
 
-// 💡 必须加上这行，显式告诉 FreeRTOS 使用标准的 ARM CM0 移植层
+// 必须加上这行，显式告诉 FreeRTOS 使用标准的 ARM CM0 移植层
 #define configINCLUDE_PLATFORM_H              1
 
 #endif /* FREERTOS_CONFIG_H */
+

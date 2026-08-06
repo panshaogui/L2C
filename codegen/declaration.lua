@@ -77,6 +77,23 @@ function M:gen_local_type(node)
                     func_name
                 )
                 table.insert(out, c_decl)
+            elseif func_info then
+                -- [HLS FFI 补丁]：支持 C 全局变量 / 结构体实例的降维绑定！
+                local v_type = func_info.typename or "any"
+                if v_type == "string" then v_type = "cstring" end
+                if v_type == "any" then v_type = "pointer" end
+                
+                if v_type == "nominal" and func_info.names and func_info.names[1] then
+                    v_type = func_info.names[1]
+                end
+                
+                local c_decl = string.format(
+                    "local %s: %s <cimport('%s'), nodecl>", 
+                    func_name, 
+                    v_type, 
+                    func_name
+                )
+                table.insert(out, c_decl)
             end
         end 
 
@@ -140,6 +157,16 @@ end
 -- 映射 2：函数声明（修复 UNKNOWN bug）
 function M:gen_local_function(node)
     local name = node.name and node.name.tk or "anon"
+    -- [HLS PIO 拦截网]：将软件函数降维为硬件状态机汇编
+    if name:match("^L2C_PIO_") then
+        local hls = require("codegen.hls_pio")
+        self.pio_registry = self.pio_registry or {}
+        local pio_name = name:gsub("^L2C_PIO_", "")
+        self.pio_registry[pio_name] = hls.compile(node, self)
+        -- 返回空注释，不向物理 C 宇宙发射任何代码
+        return "-- [L2C HLS] PIO State Machine Synthesized: " .. pio_name
+    end
+    
     local args_list = {}
     if node.args and node.args[1] then
         for _, arg in ipairs(node.args) do
@@ -233,3 +260,4 @@ function M:gen_record_function(node)
 end
 
 return M
+
