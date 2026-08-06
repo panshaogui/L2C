@@ -12,30 +12,28 @@ pico_sdk_init()
 add_executable(firmware main.c)
 
 # 3. 强行把 FreeRTOS 内核源码打包编进固件
-set(FREERTOS_DIR $ENV{FREERTOS_KERNEL_PATH})
+# set(FREERTOS_DIR $ENV{FREERTOS_KERNEL_PATH})
 target_sources(firmware PRIVATE
     main.c
-    ${FREERTOS_DIR}/tasks.c
-    ${FREERTOS_DIR}/list.c
-    ${FREERTOS_DIR}/queue.c
-    ${FREERTOS_DIR}/timers.c
-    ${FREERTOS_DIR}/portable/GCC/ARM_CM0/port.c
-    ${FREERTOS_DIR}/portable/GCC/ARM_CM0/portasm.c
-    ${FREERTOS_DIR}/portable/MemMang/heap_4.c
+    # ${FREERTOS_DIR}/tasks.c
+    # ${FREERTOS_DIR}/list.c
+    # ${FREERTOS_DIR}/queue.c
+    # ${FREERTOS_DIR}/timers.c
+    # ${FREERTOS_DIR}/portable/GCC/ARM_CM0/port.c
+    # ${FREERTOS_DIR}/portable/GCC/ARM_CM0/portasm.c
+    # ${FREERTOS_DIR}/portable/MemMang/heap_4.c
 )
 
 # 4. 指定头文件查找路径（包含 FreeRTOS 硬件层）
 target_include_directories(firmware PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
-    ${FREERTOS_DIR}/include
-    ${FREERTOS_DIR}/portable/GCC/ARM_CM0
+    # ${FREERTOS_DIR}/include
+    # ${FREERTOS_DIR}/portable/GCC/ARM_CM0
 )
 
 # 5. 链接 Pico 基础硬件库（GPIO、串口等）
-target_link_libraries(firmware pico_stdlib)
-
-# 核心修复：在这里追加 hardware_adc 模块，打通 ADC 头文件与底层驱动！
-target_link_libraries(firmware pico_stdlib pico_multicore hardware_adc hardware_dma hardware_irq)
+# 在这里追加 hardware_adc 模块，打通 ADC 头文件与底层驱动！
+target_link_libraries(firmware pico_stdlib pico_multicore hardware_adc hardware_dma hardware_irq hardware_pio)
 
 target_compile_options(firmware PRIVATE
     -mcpu=cortex-m0plus
@@ -50,3 +48,4 @@ target_link_options(firmware PRIVATE
 
 # 6. 激活全自动固件转换，自动生成可以直接拖进单片机 U 盘的 firmware.uf2
 pico_add_extra_outputs(firmware)
+
