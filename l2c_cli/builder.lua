@@ -73,6 +73,22 @@ function M.build_nelua(bundled_code, deps, input_file)
         end
     end
     
+    -- [HLS Verilog 物理闭环]：如果存在拦截的 HDL 电路，执行锻造并吐出 .v 文件
+    if engine.verilog_registry and next(engine.verilog_registry) then
+        local v_out = {}
+        for mod_name, v_code in pairs(engine.verilog_registry) do
+            table.insert(v_out, "// L2C HLS Generated RTL Module: " .. mod_name)
+            table.insert(v_out, v_code)
+            table.insert(v_out, "\n")
+        end
+        local v_file = io.open("l2c_hardware.v", "w")
+        if v_file then
+            v_file:write(table.concat(v_out, "\n"))
+            v_file:close()
+            print(" [L2C HDL Forge] 纯硬连线 Verilog 数字电路综合完毕: l2c_hardware.v")
+        end
+    end
+
     -- 模块配置并组装
     local cfg = Forge.sniff_and_forge(bundled_code)
     local final_code = Forge.assemble_system(cfg, deps, nelua_code)
