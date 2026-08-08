@@ -38,3 +38,5 @@ tlconfig.lua
 l2c/
 l2c_hardware.pio
 l2c_hardware.pio.h
+l2c_hardware.v
+main

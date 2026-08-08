@@ -167,6 +167,15 @@ function M:gen_local_function(node)
         return "-- [L2C HLS] PIO State Machine Synthesized: " .. pio_name
     end
     
+    -- [HLS Verilog RTL 拦截网]：将软件逻辑强转为硅片数字电路
+    if name:match("^L2C_HDL_") then
+        local hls_v = require("codegen.hls_verilog")
+        self.verilog_registry = self.verilog_registry or {}
+        local mod_name = name:gsub("^L2C_HDL_", "")
+        self.verilog_registry[mod_name] = hls_v.compile(node, self)
+        return "-- [L2C HLS] Verilog RTL Synthesized: " .. mod_name
+    end
+
     local args_list = {}
     if node.args and node.args[1] then
         for _, arg in ipairs(node.args) do

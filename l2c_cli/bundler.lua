@@ -39,6 +39,8 @@ function M.bundle(input_file)
         local function L2C_NumberToInt(n: number): integer end
         local function L2C_ReadArray(arr_ptr: integer, idx: integer): integer end
         local function L2C_WriteArray(arr_ptr: integer, idx: integer, val: integer) end
+        -- [L2C HLS RTL Intrinsics 硬件寄存器签证]
+        local function HDL_Reg(init_val: integer): integer end
         -- [L2C HLS PIO Intrinsics 硬件状态机魔法签证]
         local function set(a: any, b?: any) end
         local function jmp(a: any, b?: any) end
