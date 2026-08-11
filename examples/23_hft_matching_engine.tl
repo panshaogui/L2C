@@ -23,11 +23,6 @@ local function Get_HFTState(): HFTState
     return HFTState._cast(L2C_Static("HFTState"))
 end
 
--- 🔥 修复核心：强制单例模式，确保全局唯一的物理队列！
-local function Get_SharedQueue(): SPSC_Queue
-    return SPSC_Queue._cast(L2C_Static("SPSC_Queue"))
-end
-
 -- ============================================================================
 -- 🧠 副核 (Core 1) 任务：限价订单簿 (LOB) 撮合核心
 -- ============================================================================
