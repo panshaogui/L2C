@@ -60,3 +60,26 @@ local function SPSC_Pop(q_ptr: any, out_box_ptr: any): boolean
     q.tail = (q.tail + 1) & q.mask
     return true
 end
+
+local function Get_SharedQueue(): SPSC_Queue
+    return SPSC_Queue._cast(L2C_Static("SPSC_Queue"))
+end
+
+-- ==============================================================================
+-- 封装扩展：默认跨核通道分配器 (专为普通开发者屏蔽物理内存管理心智)
+-- ==============================================================================
+
+-- 1. 获取全局唯一的默认队列指针
+global function SPSC_GetDefaultQueue(): any
+    return SPSC_Queue._cast(L2C_Static("SPSC_Queue"))
+end
+
+-- 2. 获取默认的物理内存数组 (1024 长度)
+global function SPSC_GetDefaultBuffer(): integer
+    return L2C_PtrAsInt(L2C_Static("[1024]integer"))
+end
+
+-- 3. 傻瓜式一键初始化
+global function SPSC_InitDefault()
+    SPSC_Init(SPSC_GetDefaultQueue(), 1024, SPSC_GetDefaultBuffer())
+end

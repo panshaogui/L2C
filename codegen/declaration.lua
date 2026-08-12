@@ -256,17 +256,44 @@ function M:gen_record_function(node)
     local record_name = self:gen(node.fn_owner)
     local method_name = self:gen(node.name)
     
-    local args = self:gen(node.args)
-    local body = self:gen(node.body)
+    local args_list = {}
+    if node.args and node.args[1] then
+        for _, arg in ipairs(node.args) do
+            if arg.kind == "argument" then
+                local tk = arg.tk
+                -- [核心校准]：剥离 Teal 语法树中隐式注入的 self 参数
+                if tk ~= "self" then
+                    local t_name = arg.argtype and arg.argtype.typename or "any"
+                    if t_name == "nominal" and arg.argtype.names then 
+                        t_name = arg.argtype.names[1] 
+                    end
+                    
+                    -- [降维打击]：物理数组参数解包
+                    if t_name == "array" and arg.argtype.elements then
+                        local e_name = arg.argtype.elements.typename or "any"
+                        if e_name == "nominal" and arg.argtype.elements.names then 
+                            e_name = arg.argtype.elements.names[1] 
+                        end
+                        t_name = "span(" .. e_name .. ")"
+                    end
+
+                    -- [物理降维]：面向对象方法的 any 参数，必须堕落为纯 C 的 void* (pointer)！
+                    if t_name == "any" then t_name = "pointer" end
+                    
+                    table.insert(args_list, tk .. ": " .. t_name)
+                end
+            end
+        end
+    end
     
-    --  [核心校准]：Teal 的方法参数体里带着显式的 "self, "，而 Nelua 的冒号语法糖会自动注入 self。
-    -- 我们在这里把多余的 self 声明剔除掉，防止 Nelua 推断出 any 从而崩溃。
-    args = args:gsub("^self%s*,%s*", "") -- 擦除开头的 "self, "
-    args = args:gsub("^self$", "")       -- 如果只有单参数 self，直接擦干
+    local args_str = table.concat(args_list, ", ")
+    
+    self.indent_level = self.indent_level + 1
+    local body = self:gen(node.body)
+    self.indent_level = self.indent_level - 1
     
     -- 编织成标准的 Nelua 原生冒号类方法
-    return string.format("function %s:%s(%s)\n%s\nend", record_name, method_name, args, body)
+    return string.format("function %s:%s(%s)\n%s\nend", record_name, method_name, args_str, body)
 end
 
 return M
-

@@ -12,11 +12,6 @@ local function delay_ms(ms: integer)
     C_PICO.sleep_us(ms * 1000)
 end
 
--- 🛡️ 单例屏障：确保全局物理内存绝对唯一
-local function Get_SharedQueue(): SPSC_Queue
-    return SPSC_Queue._cast(L2C_Static("SPSC_Queue"))
-end
-
 local function Get_DMABuffer(): integer
     -- 向底层勒索 256 个整数的连续物理内存，转化为整数指针
     return L2C_PtrAsInt(L2C_Static("[256]integer"))

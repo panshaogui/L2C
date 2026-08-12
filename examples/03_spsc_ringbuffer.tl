@@ -16,10 +16,6 @@ local function Get_SharedState(): SharedState
     return SharedState._cast(L2C_Static("SharedState"))
 end
 
-local function Get_SharedQueue(): SPSC_Queue
-    return SPSC_Queue._cast(L2C_Static("SPSC_Queue"))
-end
-
 local function task_core1()
     local st = Get_SharedState()
     local q = Get_SharedQueue()

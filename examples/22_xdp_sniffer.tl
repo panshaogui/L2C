@@ -1,16 +1,5 @@
 -- examples/22_xdp_sniffer.tl
 -- @l2c_import: std/xdp.tl
--- @l2c_include: clib/xdp_parser.h
-
-local type C_NET = record
-    l2c_net_get_eth_type: function(any): integer
-    l2c_ptr_add: function(any, integer): any
-    l2c_net_get_ip_proto: function(any): integer
-    l2c_net_get_udp_dest: function(any): integer
-    l2c_net_get_udp_payload_len: function(any): integer
-    -- 🔥 映射汇编探针
-    l2c_rdtsc: function(): integer
-end
 
 local packet_count = 0
 
