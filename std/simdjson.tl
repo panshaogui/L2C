@@ -17,15 +17,21 @@ local type C_SIMD = record
     simdjson_c_free: function(simd_ptr)
 end
 
--- 高层优雅封装
-local function simd_parse(json_str: string, len: integer): simd_ptr
-    return C_SIMD.simdjson_c_parse(json_str, len)
+-- ==============================================================================
+-- L2C 极简封装：AVX-512 硬件加速 JSON 解析
+-- ==============================================================================
+
+local function SIMDJSON_Parse(json_str: string): simd_ptr
+    -- 核心优雅：在底层自动计算字符串长度，无需用户干预
+    return C_SIMD.simdjson_c_parse(json_str, #json_str)
 end
 
-local function simd_get_number(obj: simd_ptr, key: string): number
+local function SIMDJSON_GetNumber(obj: simd_ptr, key: string): number
     return C_SIMD.simdjson_c_get_number(obj, key)
 end
 
-local function simd_free(obj: simd_ptr)
-    if obj ~= nil then C_SIMD.simdjson_c_free(obj) end
+local function SIMDJSON_Free(obj: simd_ptr)
+    if obj ~= nil then 
+        C_SIMD.simdjson_c_free(obj) 
+    end
 end

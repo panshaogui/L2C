@@ -24,7 +24,7 @@ local function Get_HFTState(): HFTState
 end
 
 -- ============================================================================
--- 🧠 副核 (Core 1) 任务：限价订单簿 (LOB) 撮合核心
+-- 副核 (Core 1) 任务：限价订单簿 (LOB) 撮合核心
 -- ============================================================================
 local function matching_engine_task()
     local st = Get_HFTState()
@@ -43,7 +43,7 @@ local function matching_engine_task()
     local local_matches = 0
     local local_volume = 0
     
-    print("🚀 [Core 1 撮合引擎] 启动完毕，限价订单簿 (LOB) 内存预热完成，等待订单流...")
+    print(" [Core 1 撮合引擎] 启动完毕，限价订单簿 (LOB) 内存预热完成，等待订单流...")
     
     local draining = true
     while draining do
@@ -54,7 +54,7 @@ local function matching_engine_task()
 
         if SPSC_Pop(q, out) then
             local packed = out.val
-            -- ⚡ 极限解包 (Bit-Unpacking)：从一个 64 位整数中还原整个订单！
+            -- 极限解包 (Bit-Unpacking)：从一个 64 位整数中还原整个订单！
             -- [Side: 1位][Price: 16位][Qty: 16位][ID: 24位]
             local id = packed & 0xFFFFFF
             local qty = (packed >> 24) & 0xFFFF
@@ -62,7 +62,7 @@ local function matching_engine_task()
             local side = (packed >> 56) & 0x1
             
             if side == 0 then
-                -- 🟢 买单 (Bid)：吃掉小于等于我出价的卖单
+                -- 买单 (Bid)：吃掉小于等于我出价的卖单
                 while qty > 0 and best_ask <= price do
                     local ask_qty = asks[best_ask + 1]
                     if ask_qty > 0 then
@@ -84,7 +84,7 @@ local function matching_engine_task()
                 end
                 
             else
-                -- 🔴 卖单 (Ask)：吃掉大于等于我出价的买单
+                -- 卖单 (Ask)：吃掉大于等于我出价的买单
                 while qty > 0 and best_bid >= price do
                     local bid_qty = bids[best_bid + 1]
                     if bid_qty > 0 then
@@ -116,9 +116,9 @@ local function matching_engine_task()
 end
 
 -- ============================================================================
--- 🫀 主核 (Core 0) 任务：Feed Handler (高速订单发生器)
+-- 主核 (Core 0) 任务：Feed Handler (高速订单发生器)
 -- ============================================================================
-print("==== 📈 L2C 纳秒级 HFT 撮合引擎 (Bit-Packing) ====")
+print("==== L2C 纳秒级 HFT 撮合引擎 (Bit-Packing) ====")
 
 local st = Get_HFTState()
 local q = Get_SharedQueue()
@@ -131,10 +131,10 @@ local buf_ptr = L2C_Static("[1024]integer")
 SPSC_Init(q, 1024, L2C_PtrAsInt(buf_ptr))
 
 -- 发射撮合核心！
-Multicore_Launch(L2C_FuncPtr(matching_engine_task))
+Multicore_Launch(matching_engine_task)
 
 local TOTAL_ORDERS = 1000000
-print("🫀 [Core 0 网络层] 开始向无锁队列疯狂倾泻 " , TOTAL_ORDERS , " 笔交易订单...")
+print(" [Core 0 网络层] 开始向无锁队列疯狂倾泻 " , TOTAL_ORDERS , " 笔交易订单...")
 
 for i = 1, TOTAL_ORDERS do
     -- 模拟网络流：随机买卖，价格集中在 100~110 之间，从而引发极其惨烈的物理撮合
@@ -146,7 +146,7 @@ for i = 1, TOTAL_ORDERS do
     local qty = 10                                -- 统一手数
     local id = i
     
-    -- ⚡ 极限打包 (Bit-Packing)！将 4 个字段压成一个整型数字！
+    -- 极限打包 (Bit-Packing)！将 4 个字段压成一个整型数字！
     local packed = (side << 56) | (price << 40) | (qty << 24) | id
     
     while not SPSC_Push(q, packed) do
@@ -164,7 +164,7 @@ while not wait_done do
     C_LIBC.sched_yield()
 end
 
-print("\n📊 ==== 撮合结算报告 (Match Report) ====")
-print("🎯 吞吐的订单总数: ", TOTAL_ORDERS)
-print("⚔️  发生的撮合次数: ", st.sum_matches)
-print("💰 撮合的总成交量: ", st.sum_volume)
+print("\n ==== 撮合结算报告 (Match Report) ====")
+print(" 吞吐的订单总数: ", TOTAL_ORDERS)
+print("  发生的撮合次数: ", st.sum_matches)
+print(" 撮合的总成交量: ", st.sum_volume)

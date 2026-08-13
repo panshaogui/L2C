@@ -17,3 +17,25 @@ local type C_UV = record
     uv_timer_start: function(any, any, integer, integer): integer
     uv_run: function(uv_loop_t, integer): integer
 end
+
+-- ==============================================================================
+-- L2C 极简封装：Libuv 异步事件引擎
+-- ==============================================================================
+
+local function UV_DefaultLoop(): uv_loop_t
+    return C_UV.uv_default_loop()
+end
+
+-- 接收指针 (timer_ptr)，直接透传给 C 引擎
+local function UV_TimerInit(loop: uv_loop_t, timer_ptr: any): integer
+    return C_UV.uv_timer_init(loop, timer_ptr)
+end
+
+-- 接收指针 (timer_ptr 和 cb_ptr)，直接透传！
+local function UV_TimerStart(timer_ptr: any, cb_ptr: any, timeout: integer, repeat_ms: integer): integer
+    return C_UV.uv_timer_start(timer_ptr, cb_ptr, timeout, repeat_ms)
+end
+
+local function UV_Run(loop: uv_loop_t): integer
+    return C_UV.uv_run(loop, 0)
+end

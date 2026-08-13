@@ -55,7 +55,7 @@ st.done = 0
 local buf_ptr = L2C_Static("[1024]integer")
 SPSC_Init(q, 1024, L2C_PtrAsInt(buf_ptr))
 
-Multicore_Launch(L2C_FuncPtr(task_core1))
+Multicore_Launch(task_core1)
 
 local push_count = 1000000
 for i = 1, push_count do

@@ -12,10 +12,9 @@ local type C_MULTICORE = record
     l2c_launch_core1: function(any)
 end
 
-local type Multicore = record
-end
-
--- @L2C_Inline: 发射业务函数到物理 Core 1
-global function Multicore_Launch(task_func: any)
+-- 核心升级：强类型校验！参数不再是 any，而是必须为无参函数 function()！
+-- 这样 Teal 前端会帮我们拦截错误的传参。
+global function Multicore_Launch(task_func: function())
+    -- 脏活掩盖：在这里自动将 Lua 函数强转为 C 物理指针！普通用户再也看不见它！
     C_MULTICORE.l2c_launch_core1(L2C_FuncPtr(task_func))
 end

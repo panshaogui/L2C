@@ -1,5 +1,5 @@
 -- examples/11_hft_sniper.tl
--- 📦 物理引入 L2C 标准库 (zmq 内部已经声明了 L2C_Buffer 和 L2C_Ref)
+-- 物理引入 L2C 标准库 (zmq 内部已经声明了 L2C_Buffer 和 L2C_Ref)
 -- @l2c_import: std/zmq.tl
 
 -- 1. 定义交易所推送的二进制内存对齐结构
@@ -7,7 +7,7 @@ local type TickPacket = record
     symbol_id: integer
     price: integer
     qty: integer
-    -- 🔥 开启零拷贝强转特权
+    -- 开启零拷贝强转特权
     _cast: function(any): TickPacket
 end
 
@@ -33,33 +33,33 @@ local function on_tick_received(pkt: TickPacket)
     for i = 1, 5 do
         sum = sum + ma_window[i]
     end
-    -- ⚡ 使用整数除法 // ，压榨 CPU 时钟周期
+    -- 使用整数除法 // ，压榨 CPU 时钟周期
     local ma_price = sum // 5
     
     -- 核心狙击逻辑：价格瞬间突破均线，且带量！
     if pkt.price > ma_price then
         if pkt.qty > 100 then
-            print("🔫 [狙击开火] 捕捉到放量突破！Symbol:", pkt.symbol_id, "Price:", pkt.price, "MA:", ma_price)
+            print(" [狙击开火] 捕捉到放量突破！Symbol:", pkt.symbol_id, "Price:", pkt.price, "MA:", ma_price)
         end
     end
 end
 
 -- ==========================================
--- 🚀 物理网关主程序
+-- 物理网关主程序
 -- ==========================================
-print("⚡ L2C HFT Sniper 引擎启动，挂载 ZMQ 网卡...")
+print(" L2C HFT Sniper 引擎启动，挂载 ZMQ 网卡...")
 local ctx = C_ZMQ.zmq_ctx_new()
 local subscriber = C_ZMQ.zmq_socket(ctx, 2) -- ZMQ_SUB
 C_ZMQ.zmq_connect(subscriber, "tcp://127.0.0.1:5555")
 
 local msg_buf = L2C_Buffer(24)
 
-print("📡 雷达已锁定，等待二进制 Tick 数据轰炸...")
+print(" 雷达已锁定，等待二进制 Tick 数据轰炸...")
 
 while true do
     local bytes = C_ZMQ.zmq_recv(subscriber, L2C_Ref(msg_buf), 24, 0)
     if bytes > 0 then
-        -- 🔥 零拷贝降维打击：字节流原地变身为 TickPacket 结构体！
+        -- 零拷贝降维打击：字节流原地变身为 TickPacket 结构体！
         local tick: TickPacket = TickPacket._cast(L2C_Ref(msg_buf))
         on_tick_received(tick)
     end
