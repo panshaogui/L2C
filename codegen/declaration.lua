@@ -195,7 +195,12 @@ function M:gen_local_function(node)
                 end
 
                 --  [物理降维]：业务函数如果传 any，在底层就是 C 语言的不透明指针 void* (pointer)！
-                if t_name == "any" then t_name = "pointer" end
+                if t_name == "any" then 
+                    t_name = "pointer"
+                elseif t_name == "function" then
+                    -- 完美对接 Nelua 的类型系统，保留函数特征！
+                    t_name = "function()"
+                end
                 
                 table.insert(args_list, arg.tk .. ": " .. t_name)
             end
@@ -234,7 +239,12 @@ function M:gen_global_function(node)
                 end
 
                 --  [物理降维]：任何 any 参数都必须堕落为纯 C 指针
-                if t_name == "any" then t_name = "pointer" end
+                if t_name == "any" then 
+                    t_name = "pointer" 
+                elseif t_name == "function" then
+                    -- 完美对接 Nelua 的类型系统，保留函数特征！
+                    t_name = "function()"
+                end
                 
                 table.insert(args_list, arg.tk .. ": " .. t_name)
             end
@@ -278,7 +288,12 @@ function M:gen_record_function(node)
                     end
 
                     -- [物理降维]：面向对象方法的 any 参数，必须堕落为纯 C 的 void* (pointer)！
-                    if t_name == "any" then t_name = "pointer" end
+                    if t_name == "any" then 
+                        t_name = "pointer" 
+                    elseif t_name == "function" then
+                        -- 完美对接 Nelua 的类型系统，保留函数特征！
+                        t_name = "function()"
+                    end
                     
                     table.insert(args_list, tk .. ": " .. t_name)
                 end

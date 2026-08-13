@@ -25,3 +25,29 @@ end
 
 -- 导出状态码
 local SQLITE_OK: integer = 0
+
+-- ==============================================================================
+-- L2C 极简封装：SQLite 零开销存储
+-- ==============================================================================
+
+-- 核心优雅：隐藏双重指针解引用，直接返回干净的 db 句柄！
+local function SQLite_Open(filename: string): sqlite3
+    local db = sqlite3._ptr()
+    local rc = C_SQLITE.sqlite3_open(filename, L2C_Ref(db))
+    if rc ~= 0 then return nil end
+    return db
+end
+
+-- 针对常量的执行
+local function SQLite_Exec(db: sqlite3, sql: string): integer
+    return C_SQLITE.sqlite3_exec(db, L2C_Cast(sql, "cstring"), nil, nil, nil)
+end
+
+-- 针对高性能栈内存 (Buffer) 的复用执行
+local function SQLite_ExecBuffer(db: sqlite3, sql_buf: any): integer
+    return C_SQLITE.sqlite3_exec(db, L2C_Cast(L2C_Ref(sql_buf), "cstring"), nil, nil, nil)
+end
+
+local function SQLite_Close(db: sqlite3): integer
+    return C_SQLITE.sqlite3_close(db)
+end

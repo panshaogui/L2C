@@ -35,7 +35,7 @@ payload.core1_count = 0
 payload.total_ops = 0
 
 --  点火！启动 Core 1
-Multicore_Launch(L2C_FuncPtr(task_core1))
+Multicore_Launch(task_core1)
 
 -- Core 0 计算：100万次
 for i = 1, 1000000 do

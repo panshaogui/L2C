@@ -21,23 +21,28 @@ local type C_CJSON = record
     cJSON_Delete: function(cJSON_ptr)
 end
 
--- 3. 极简封装，抛出给高层业务使用
-local function cjson_parse(json_str: any): cJSON_ptr
-    return C_CJSON.cJSON_Parse(json_str)
+-- ==============================================================================
+-- L2C 极简封装：CJSON 引擎
+-- ==============================================================================
+
+-- 路线 1：给高层应用使用 (解析 Lua 字符串，内部自动物理强转)
+local function CJSON_ParseString(json_str: string): cJSON_ptr
+    return C_CJSON.cJSON_Parse(L2C_Cast(json_str, "cstring"))
 end
 
-local function cjson_get_number(obj: cJSON_ptr, key: string): number
+-- 路线 2：给高频网关使用 (直接传入 L2C_Ref 的网络缓冲区指针，0-GC 绝对零拷贝)
+local function CJSON_ParseBuffer(buf_ptr: any): cJSON_ptr
+    return C_CJSON.cJSON_Parse(buf_ptr)
+end
+
+local function CJSON_GetNumber(obj: cJSON_ptr, key: string): number
     local item = C_CJSON.cJSON_GetObjectItemCaseSensitive(obj, key)
-    -- 恢复高层优雅：直接用 nil，底层引擎会帮我们映射为 nilptr！
     if item ~= nil and C_CJSON.cJSON_IsNumber(item) ~= 0 then
         return C_CJSON.cJSON_GetNumberValue(item)
     end
     return 0.0
 end
 
-local function cjson_free(obj: cJSON_ptr)
-    -- 恢复高层优雅：直接用 nil
-    if obj ~= nil then
-        C_CJSON.cJSON_Delete(obj)
-    end
+local function CJSON_Free(obj: cJSON_ptr)
+    if obj ~= nil then C_CJSON.cJSON_Delete(obj) end
 end
