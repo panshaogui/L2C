@@ -14,10 +14,22 @@ function M:gen_local_type(node)
         name = node.name.tk
     end
     
+    if node.names and node.names[1] then name = node.names[1].tk or node.names[1] end
     -- 如果真名还是不幸撞上了关键字，直接紧急兜底
     if name == "local" or name == "type" then
         return "" 
     end
+
+    local function get_real_def(n)
+        local d = n.type_def or n.value
+        while d do
+            if d.typename == "enum" or d.typename == "record" then return d end
+            d = d.newtype or d.def
+        end
+        return nil
+    end
+    
+    local def = get_real_def(node)
 
     --  [FFI 闭环]：精准捕获特殊命名空间 C 或 C_xxx，物理将 Teal 的声明转换为 Nelua FFI 绑定！
     if name == "C" or name:match("^C_") then
@@ -100,9 +112,34 @@ function M:gen_local_type(node)
         return table.concat(out, "\n")
     end
 
+    -- 终极真理解法：遍历 enumset 哈希表提取 Enum
+    if def.typename == "enum" then
+        local out = {}
+        table.insert(out, string.format("local %s = @enum {", name))
+        self.indent_level = self.indent_level + 1
+        
+        self.enum_registry = self.enum_registry or {}
+        local val_idx = 0
+        
+        -- 直接从 X光 照出的 enumset 里拿键名！
+        if def.enumset then
+            for enum_key, _ in pairs(def.enumset) do
+                if type(enum_key) == "string" then
+                    table.insert(out, self:indent() .. string.format("%s = %d,", enum_key, val_idx))
+                    -- 写入注册表，供 literal.lua 拦截
+                    self.enum_registry[enum_key] = name
+                    val_idx = val_idx + 1
+                end
+            end
+        end
+        
+        self.indent_level = self.indent_level - 1
+        table.insert(out, self:indent() .. "}")
+        return table.concat(out, "\n")
+    end
+
     local def = node.value and node.value.newtype and node.value.newtype.def
     if not def or def.typename ~= "record" then return "" end
-    
     self.record_registry = self.record_registry or {}
     
     --  [升级]：不仅保存字段名，还保存类型，用于后续的安全兜底初始化
@@ -111,9 +148,18 @@ function M:gen_local_type(node)
         --  [精确对齐]：在这里同时拦截 _new 和所有类型为 "function" 的方法字段，彻底闭环
         local f_node = def.fields[field_name]
         if field_name ~= "_new" and f_node and f_node.typename ~= "function" then
+            -- 核心修复：取出类型名，并彻底剥离 nominal 伪装！
+            local t_name = f_node.typename or "any"
+            if t_name == "nominal" and f_node.names and f_node.names[1] then
+                t_name = f_node.names[1]
+            end
+            
+            -- 同步保持物理降维逻辑
+            if t_name == "string" then t_name = "cstring" end
+            if t_name == "any" then t_name = "pointer" end
+
             table.insert(fields_info, { 
-                name = field_name, 
-                type = def.fields[field_name].typename 
+                name = field_name, type = t_name 
             })
         end
     end
@@ -125,7 +171,13 @@ function M:gen_local_type(node)
         -- 直接将其映射为底层 C 的 void* (Nelua 叫 @pointer)
         table.insert(out, string.format("local %s = @pointer", name))
     else
-        table.insert(out, string.format("local %s = @record {", name))
+        -- 确保 <packed> 放在 Nelua 要求的正确位置
+        if name:match("^Packed_") then
+            table.insert(out, string.format("local %s: type <packed> = @record {", name))
+        else
+            table.insert(out, string.format("local %s = @record {", name))
+        end
+        
         self.indent_level = self.indent_level + 1
         for _, f_info in ipairs(fields_info) do
             table.insert(out, self:indent() .. string.format("%s: %s,", f_info.name, f_info.type))

@@ -54,8 +54,18 @@ end
 
 --  [物理对齐]：转译字符串字面量节点（剥离双重引号）
 function M:gen_string(node)
-    -- Teal 节点带回来的 node.value 已经是包含双引号的干净字符串了，直接返回即可
-    return tostring(node.value or node.tk or node[1])
+    local val = tostring(node.value or node.tk or node[1])
+    
+    -- 提取出不带引号的纯净字符串
+    local pure_val = val:match("([a-zA-Z_][a-zA-Z0-9_]*)")
+    
+    -- 如果在刚才写入的 enum_registry 找到了，立刻强转！
+    if pure_val and self.enum_registry and self.enum_registry[pure_val] then
+        local enum_name = self.enum_registry[pure_val]
+        return enum_name .. "." .. pure_val
+    end
+    
+    return val
 end
 
 function M:gen_integer(node) return node.tk end
