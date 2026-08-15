@@ -26,6 +26,8 @@ function M.bundle(input_file)
         local function L2C_Buffer(size: integer): any end
         local function L2C_NumberArray(size: integer): {number} end
         local function L2C_IntegerArray(size: integer): {integer} end
+        -- 核心签证：挂载结构体连续数组魔法！
+        local function L2C_RecordArray(tname: string, size: integer): any end
         local function L2C_Ref(var: any): any end
         local function L2C_Cast(ptr: any, tname: string): any end
         local function L2C_FuncPtr(func: any): any end

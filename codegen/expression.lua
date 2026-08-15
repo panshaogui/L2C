@@ -72,6 +72,22 @@ function M:gen_op(node)
             return "(@[" .. self:gen(node.e2[1]) .. "]number)()"
         end
 
+        -- 终极物理连片内存：在 Tick 竞技场开辟绝对连续的结构体数组！
+        if func_node.kind == "variable" and func_node.tk == "L2C_RecordArray" then
+            local type_node = node.e2[1]
+            local size_expr = self:gen(node.e2[2])
+            
+            -- 智能脱壳，拿到真实的结构体名字 (如 "Order" -> Order)
+            local type_name = type_node.value or type_node.tk or "any"
+            if type_name:match('^".*"$') or type_name:match("^'.*'$") then
+                type_name = type_name:sub(2, -2)
+            end
+            
+            -- Nelua 语法降维：利用 Arena 瞬间划拨总字节数 (数量 * sizeof(类型))
+            -- 并暴力强转为 C 语言的 0 长度指针数组！
+            return string.format("(@*[0]%s)(L2C_Get_Arena():alloc(%s * #@%s))", type_name, size_expr, type_name)
+        end
+
         -- [C FFI 内存宏]：静态持久化内存分配 (L2C_Static)
         if func_node.kind == "variable" and func_node.tk == "L2C_Static" then
             local type_node = node.e2[1]
@@ -94,6 +110,14 @@ function M:gen_op(node)
             local ptr_exp = self:gen(node.e2[1])
             -- Nelua 原生纯 C 物理指针强转语法：(@*Type)(ptr)
             return string.format("(@*%s)(%s)", type_name, ptr_exp)
+        end
+
+        -- 核心新增：数组形态的 0-GC 强转魔法签证！
+        -- 将 Teal 的 any 完美降维成 Nelua 的 (@*[0]Type) C 语言数组指针！
+        if func_node.kind == "op" and func_node.op.op == "." and func_node.e2.tk == "_cast_arr" then
+            local type_name = func_node.e1.tk
+            local ptr_exp = self:gen(node.e2[1])
+            return string.format("(@*[0]%s)(%s)", type_name, ptr_exp)
         end
 
         if func_node.kind == "op" and func_node.op.op == "." and func_node.e2.tk == "_ptr" then
