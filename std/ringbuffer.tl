@@ -66,12 +66,13 @@ local function Get_SharedQueue(): SPSC_Queue
 end
 
 -- ==============================================================================
--- 封装扩展：默认跨核通道分配器 (专为普通开发者屏蔽物理内存管理心智)
+-- 封装扩展：默认跨核通道分配器 (0-GC 多返回值终极版)
 -- ==============================================================================
 
 -- 1. 获取全局唯一的默认队列指针
+-- 核心旧伤修复：去掉 SPSC_Queue._cast，直接返回 L2C_Static，避免底层的按值拷贝！
 global function SPSC_GetDefaultQueue(): any
-    return SPSC_Queue._cast(L2C_Static("SPSC_Queue"))
+    return L2C_Static("SPSC_Queue")
 end
 
 -- 2. 获取默认的物理内存数组 (1024 长度)
@@ -82,4 +83,27 @@ end
 -- 3. 傻瓜式一键初始化
 global function SPSC_InitDefault()
     SPSC_Init(SPSC_GetDefaultQueue(), 1024, SPSC_GetDefaultBuffer())
+end
+
+-- 4. 傻瓜式极速推送
+global function SPSC_PushDefault(val: integer): boolean
+    return SPSC_Push(SPSC_GetDefaultQueue(), val)
+end
+
+-- 5. 斩龙魔法：多返回值弹出！(彻底遵循 C 语言内存法则)
+global function SPSC_PopDefault(): boolean, integer
+    -- 在栈上开辟纯净的 8 字节物理缓冲 (绝对 0-GC)
+    local buf = L2C_Buffer(8)
+    
+    -- 将缓冲指针透传给底层，由底层填入数据
+    local ok = SPSC_Pop(SPSC_GetDefaultQueue(), L2C_Ref(buf))
+    
+    local val = 0
+    if ok then
+        -- 核心修复：将栈缓冲原地强转为 IntBox 结构体，合法读取内存！免疫优化器抹杀！
+        local box = IntBox._cast(L2C_Ref(buf))
+        val = box.val
+    end
+    
+    return ok, val
 end
