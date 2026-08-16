@@ -162,7 +162,8 @@ function M.sniff_and_forge(bundled_code)
     cfg.nelua_bindings = [[
         local function L2C_Spinlock_Lock(id: integer): void <cimport 'L2C_SPINLOCK_LOCK', nodecl> end
         local function L2C_Spinlock_Unlock(id: integer): void <cimport 'L2C_SPINLOCK_UNLOCK', nodecl> end
-        local function l2c_memory_barrier(): void <cimport 'l2c_memory_barrier', nodecl> end
+        -- 核心修复：大小写对齐！打通真实物理内存屏障！
+        local function L2C_Memory_Barrier(): void <cimport 'l2c_memory_barrier', nodecl> end
         local function l2c_spsc_read_arr(arr_ptr: integer, idx: integer): integer <cimport 'l2c_spsc_read_arr', nodecl> end
         local function l2c_spsc_write_arr(arr_ptr: integer, idx: integer, val: integer): void <cimport 'l2c_spsc_write_arr', nodecl> end
     ]]

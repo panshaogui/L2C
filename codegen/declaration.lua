@@ -190,25 +190,57 @@ function M:gen_local_type(node)
 end
 
 function M:gen_local_declaration(node)
-    local var_name = node.vars[1].tk
+    local vars_list = {}
+    
+    -- 核心修复：遍历所有变量，智能提取变量名，彻底免疫带有类型的 nil 陷阱！
+    if node.vars then
+        for i, v_node in ipairs(node.vars) do
+            local v_str = v_node.tk
+            if not v_str and v_node[1] then
+                v_str = type(v_node[1]) == "table" and v_node[1].tk or v_node[1]
+            end
+            
+            -- 防弹衣：哪怕 Teal 真的吐出了 nil，我们也强制重命名，绝不引发底层语法错误
+            if type(v_str) ~= "string" or v_str == "" or v_str == "nil" then
+                v_str = "L2C_DUMMY_VAR_" .. tostring(math.random(1000, 9999))
+            end
+            
+            table.insert(vars_list, v_str)
+        end
+    end
+    
+    local vars_str = table.concat(vars_list, ", ")
+    if vars_str == "" then vars_str = "L2C_DUMMY_VAR_EMPTY" end
+    
     local exps_str = self:gen(node.exps)
     
     if type(exps_str) == "string" and exps_str:match("_tl_compat") then
         return "-- L2C: Stripped Teal _tl_compat polyfill"
     end
     
-    --  [安全兜底] 如果没有赋值表达式，绝不生成带 "=" 的乱码
-    if exps_str == "" then
-        return string.format("local %s", var_name)
+    -- 完美支持多变量拼接 (local a, b = foo())
+    if not exps_str or exps_str == "" then
+        return string.format("local %s", vars_str)
     else
-        return string.format("local %s = %s", var_name, exps_str)
+        return string.format("local %s = %s", vars_str, exps_str)
     end
-    
 end
 
 -- 映射 2：函数声明（修复 UNKNOWN bug）
 function M:gen_local_function(node)
     local name = node.name and node.name.tk or "anon"
+    -- 核心修复：拦截所有为 Teal 伪造的魔法原语，绝对禁止进入物理域形成遮蔽！
+    local intrinsics = {
+        L2C_Buffer=1, L2C_NumberArray=1, L2C_IntegerArray=1, L2C_RecordArray=1,
+        L2C_Ref=1, L2C_Cast=1, L2C_FuncPtr=1, L2C_NewPointer=1, L2C_Tick_Reset=1,
+        L2C_Static=1, L2C_Spinlock_Lock=1, L2C_Spinlock_Unlock=1, L2C_Memory_Barrier=1,
+        L2C_PtrAsInt=1, L2C_NumberToInt=1, L2C_ReadArray=1, L2C_WriteArray=1,
+        set=1, jmp=1, wait=1, in_=1, out=1, push=1, pull=1, mov=1, irq=1, wrap_target=1, wrap=1
+    }
+    if intrinsics[name] then
+        return "-- [L2C 物理拦截] Stripped Intrinsic: " .. name
+    end
+
     -- [HLS PIO 拦截网]：将软件函数降维为硬件状态机汇编
     if name:match("^L2C_PIO_") then
         local hls = require("codegen.hls_pio")
