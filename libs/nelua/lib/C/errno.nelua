@@ -1,0 +1,20 @@
+--[[
+Library that imports symbols from the `<errno.h>` header according to C11 specifications.
+
+For a complete documentation about the functions,
+see [C errno documentation](https://www.cplusplus.com/reference/cerrno/).
+]]
+
+require 'C'
+
+-- Global variables
+
+global C.errno: cint <cimport,cinclude'<errno.h>'>
+
+-- Constants
+
+global C.EDOM: cint <const,cimport,cinclude'<errno.h>'>
+global C.EILSEQ: cint <const,cimport,cinclude'<errno.h>'>
+global C.ERANGE: cint <const,cimport,cinclude'<errno.h>'>
+
+return C

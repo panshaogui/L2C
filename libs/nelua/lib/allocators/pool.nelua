@@ -1,0 +1,143 @@
+--[[
+The pool allocator allocates chunks from a fixed contiguous buffer of many chunks,
+allocations pop a free chunk from the pool and deallocations push a chunk back.
+It works by using a single linked list of free chunks.
+
+The purpose of this allocator is to have very fast allocations of objects with almost
+no runtime cost when the maximum used space is known ahead.
+
+Reallocations and deallocations free space (unlikely the Arena allocator).
+Allocations greater than the chunk size will always fail.
+
+The implementation is based on
+[this article](https://www.gingerbill.org/article/2019/02/16/memory-allocation-strategies-004/).
+]]
+
+require 'allocators.allocator'
+
+## local function make_PoolAllocatorT(T, SIZE)
+  ##[[
+  static_assert(traits.is_type(T), 'T must be a type')
+  static_assert(traits.is_number(SIZE), 'size must be a number')
+  static_assert(SIZE * T.size > 0, 'size must be greater than 0')
+  static_assert(T.size >= primtypes.pointer.size, 'chunk size must be at least a pointer in size')
+  ]]
+
+  local T: type = #[T]#
+  local SIZE <comptime> = #[SIZE]#
+
+  -- Pool free node.
+  local PoolFreeNode: type = @record{
+    next: *PoolFreeNode
+  }
+
+  -- Pool chunk.
+  local PoolChunkT: type = @union{
+    value: T,
+    p: pointer
+  }
+
+  -- Pool allocator record defined when instantiating the generic `PoolAllocator`.
+  local PoolAllocatorT: type = @record{
+    initialized: boolean,
+    head: *PoolFreeNode,
+    buffer: [SIZE]PoolChunkT
+  }
+
+  -- Link all free nodes in reverse order.
+  local function pool_link_free_nodes(self: *PoolAllocatorT): void
+    local head: *PoolFreeNode
+    for i:isize=#self.buffer-1,0,-1 do
+      local node: *PoolFreeNode = (@*PoolFreeNode)(&self.buffer[i])
+      node.next = head
+      head = node
+    end
+    self.head = head
+  end
+
+  --[[
+  Allocates `size` bytes and returns a pointer to the allocated memory block,
+  using a free chunk from the pool.
+
+  The allocated memory is not initialized.
+  If `size` is greater than the size of T, then the operation fails.
+  If `size` is zero, then the operation fails.
+  If the operation fails, then returns `nilptr`.
+  ]]
+  function PoolAllocatorT:alloc(size: usize, flags: facultative(usize)): pointer
+    if unlikely(size > #PoolChunkT or size == 0) then return nilptr end
+    local node: *PoolFreeNode = self.head -- get the latest free node
+    -- the node will be nilptr if not initialized or out of memory
+    if unlikely(node == nilptr) then
+      if not self.initialized then -- first initialization
+        self.initialized = true
+        pool_link_free_nodes(self)
+        node = self.head
+      else -- out of memory
+        return nilptr
+      end
+    end
+    self.head = node.next -- pop free node
+    return node -- the node is now actually the allocated chunk
+  end
+
+  --[[
+  Deallocates the allocated memory block pointed by `p`,
+  leaving the pool chunk of `p` free to be reused in a subsequent allocation.
+  ]]
+  function PoolAllocatorT:dealloc(p: pointer): void
+    if unlikely(p == nilptr) then return end
+    -- is this pointer really valid?
+    local offset: usize = (@usize)(p) - (@usize)(&self.buffer[0])
+    check(offset // #PoolChunkT < #self.buffer and offset % #PoolChunkT == 0, 'invalid pointer')
+    -- push free node
+    local node: *PoolFreeNode = (@*PoolFreeNode)(p)
+    node.next = self.head
+    self.head = node
+  end
+
+  --[[
+  Deallocate all allocations,
+  leaving all pool chunks free to be reused in new allocations.
+  ]]
+  function PoolAllocatorT:deallocall(): void
+    self.head = nilptr
+    pool_link_free_nodes(self)
+  end
+
+  --[[
+  This function is provided just for compatibility.
+
+  Any attempt to grow the memory block will fail, returning `nilptr`.
+  Any attempt to shrink the memory block will be ignored, returning the same `p`.
+  New allocations and deallocation through this function will work normally.
+  ]]
+  function PoolAllocatorT:realloc(p: pointer, newsize: usize, oldsize: usize): pointer
+    if unlikely(p == nilptr) then
+      return self:alloc(newsize)
+    elseif unlikely(newsize == 0) then
+      self:dealloc(p)
+      return nilptr
+    elseif unlikely(newsize > #PoolChunkT) then
+      return nilptr
+    else
+      return p
+    end
+  end
+
+  ## Allocator_implement_interface(PoolAllocatorT)
+
+  ## return PoolAllocatorT
+## end
+
+--[[
+Generic used to instantiate a arena allocator type in the form of `PoolAllocator(T, SIZE)`.
+
+Argument `T` is the object type in the pool.
+Argument `SIZE` is the maximum number of elements in the pool.
+
+The pool will effectively have an internal buffer with `#T * SIZE` bytes.
+]]
+global PoolAllocator: type = #[generalize(make_PoolAllocatorT)]#
+
+return PoolAllocator

@@ -1,0 +1,144 @@
+--[[
+The span library provides the span generic.
+
+A span is used as a view to elements of a contiguous memory block.
+Contiguous containers like vector, sequence and array can be viewed as a span.
+Span elements start at index 0 and go up to length-1 (like fixed arrays).
+
+Spans are especially useful for making functions with arguments that
+are agnostic to the input container type.
+
+Spans are also known as "fat pointer" or "slice" in some other languages.
+
+Remarks: A span initialized from a list of unnamed fields points to an array of the list elements.
+]]
+
+## local function make_spanT(T)
+  ##[[
+  static_assert(traits.is_type(T), "invalid type '%s", T)
+  static_assert(not T.is_comptime, "spans cannot be of type '%s'", T)
+  static_assert(T.is_empty ~= true, "spans cannot be of empty type '%s'", T)
+  ]]
+  local T: type = @#[T]#
+
+  -- Span record defined when instantiating the generic `span` with type `T`.
+  local spanT: type <nickname(#[string.format('span(%s)', T)]#)> = @record{
+    data: *[0]T,
+    size: usize
+  }
+
+  ##[[
+  local spanT = spanT.value
+  spanT.is_contiguous = true
+  spanT.is_container = true
+  spanT.is_span = true
+  spanT.subtype = T
+  ]]
+
+  -- Concept matching contiguous containers of T.
+  local spanT_convertible_concept: type = #[concept(function(x)
+    if context:get_visiting_node(1).is_Return then
+      return false, string.format("cannot perform conversion from '%s' to '%s' while inside a return statement",
+        x.type, spanT)
+    end
+    if x.type:is_contiguous_of(T) then
+      if x.type:is_array_of(T) then
+        return types.PointerType(x.type)
+      else
+        return true
+      end
+    elseif x.type.is_string and (T.is_integral and T.bitsize == 8) then
+      return true
+    end
+    return false, string.format("no viable conversion from '%s' to '%s'", x.type, spanT)
+  end, function(node)
+    if node.is_InitList and #node > 0 and not node:find_child_with_field('is_Pair') then
+      -- is a list of unnamed values
+      return types.PointerType(types.ArrayType(T, #node))
+    end
+  end)]#
+
+  -- Returns `true` if the span is empty, that is, its length is `0`.
+  function spanT.empty(self: spanT): boolean <inline,nosideeffect>
+    return self.size == 0
+  end
+
+  -- Returns `true` if the span is not empty and has a valid data pointer.
+  function spanT.valid(self: spanT): boolean <inline,nosideeffect>
+    return self.size > 0 and self.data ~= nilptr
+  end
+
+  --[[
+  Returns the sub span that starts at `i` (inclusive) and continues until `j` (exclusive).
+  Both `i` and `j-1` must be in the span bounds and the expression `i <= j` must be true.
+
+  *Remarks*: When using the GC the sub span will not hold reference to the original span data,
+  thus if you don't hold the original reference somewhere you will have a dangling reference.
+  ]]
+  function spanT.sub(self: spanT, i: usize, j: usize): spanT <inline,nosideeffect>
+    check(i >= 0 and i <= self.size and j <= self.size and i <= j, 'index out of range')
+    if unlikely(self.size == 0) then return (@spanT){} end
+    if likely(j >= i) then
+      return (@spanT){data=&self.data[i], size=j-i}
+    end
+    return (@spanT){data=&self.data[i], size=0}
+  end
+
+  --[[
+  Returns the reference of element at index `i`.
+  Argument `i` must be less than span size.
+  Used when indexing elements with square brackets (`[]`).
+  ]]
+  function spanT.__atindex(self: spanT, i: usize): *T <inline,nosideeffect>
+    check(i < self.size, 'index out of range')
+    return &self.data[i]
+  end
+
+  -- Returns the number of elements in the span.
+  function spanT.__len(self: spanT): isize <inline,nosideeffect>
+    return (@isize)(self.size)
+  end
+
+  -- Returns the size of the span in bytes.
+  function spanT.sizebytes(self: spanT): usize
+    return self.size * #@T
+  end
+
+  -- Initializes a span from a pointer to contiguous containers.
+  function spanT.__convert(values: spanT_convertible_concept): spanT <inline>
+    local self: spanT
+    ## if values.type.is_string then
+      self.data = (@*[0]T)(values.data)
+      self.size = values.size
+    ## else
+      if #values > 0 then
+        self.data = (@*[0]T)(&values[#[values.type:implicit_deref_type().is_oneindexing and 1 or 0]#])
+        self.size = (@usize)(#values)
+      end
+    ## end
+    return self
+  end
+
+  -- Converts a span of T into a span of U.
+  function spanT.as(self: spanT, U: type): auto
+    ## if U.value.size == 1 then
+      return (@span(U)){data=(@*[0]U)(self.data), size=self.size * #@T}
+    ## else
+      return (@span(U)){data=(@*[0]U)(self.data), size=(self.size * #@T) // #@U}
+    ## end
+  end
+
+  ## return spanT
+## end
+
+--[[
+Generic used to instantiate a span type in the form of `span(T)`.
+
+Argument `T` is the value type that the span will store.
+]]
+global span: type = #[generalize(make_spanT)]#
+
+-- Expose iterators to use with spans.
+require 'iterators'
+
+return span

@@ -1,0 +1,21 @@
+-- Tables are not implement yet.
+
+## static_error 'tables are not implement yet'
+
+-- table
+-- table.concat(list, sep, i, j)
+-- table.insert(list, pos, value)
+-- table.remove(list, pos)
+-- table.move(a1, f, e, t, a2)
+-- table.sort(list, comp)
+-- table.pack(...)
+-- table.unpack(list, i, j)
+
+-- rawequal(v1, v2)
+-- rawget(table, index)
+-- rawlen(v)
+-- rawset(table, index, value)
+-- getmetatable(object)
+-- setmetatable(table, metatable)
+
+-- _G

@@ -1,0 +1,35 @@
+--[[
+The default allocator library provides the default allocator used by the standard libraries.
+
+The default allocator is `GCAllocator` when GC is enabled,
+otherwise `GeneralAllocator` (when using the pragma `nogc`).
+
+When disabling the GC the user is responsible for manually deallocating
+unused memory from the default allocator.
+]]
+
+## if not pragmas.nogc then -- GC enabled
+  require 'allocators.gc'
+  ## context.rootscope.symbols.default_allocator = gc_allocator
+  ## context.rootscope.symbols.DefaultAllocator = GCAllocator
+## else -- GC disabled
+  require 'allocators.general'
+  ## context.rootscope.symbols.default_allocator = general_allocator
+  ## context.rootscope.symbols.DefaultAllocator = GeneralAllocator
+## end
+
+--[[
+Shorthand for `default_allocator:new`.
+For details see also `Allocator:new`.
+]]
+global function new(what: auto, size: facultative(usize), flags: facultative(usize)): auto
+  return default_allocator:new(what, size, flags)
+end
+
+--[[
+Shorthand for `default_allocator:delete`.
+For details see also `Allocator:delete`.
+]]
+global function delete(v: auto): void
+  default_allocator:delete(v)
+end

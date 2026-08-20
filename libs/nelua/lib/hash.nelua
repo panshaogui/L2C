@@ -1,0 +1,114 @@
+--[[
+The hash library provides utilities to generate hash for values.
+
+The included hash functions in this library are intended to be used containers such as `hashmap` and `table`,
+thus the hash functions are designed to be fast, and are not necessarily equal across platforms
+and may skip bytes.
+Use a better hash algorithm in case you need deterministic hash across platforms
+and with better quality.
+]]
+
+require 'span'
+
+-- Namespace for hash module.
+global hash: type = @record{}
+
+-- This is the same simple hash function used in Lua.
+local function lhash(data: *[0]byte, len: usize, seed: usize, step: usize): usize <inline>
+  seed = seed ~ len
+  while len >= step do
+    seed = seed ~ ((seed << 5) + (seed >> 2) + data[len - 1])
+    len = len - step
+  end
+  return seed
+end
+
+--[[
+Hashes a span of bytes, iterating over all bytes.
+This function can be slow for long spans.
+]]
+function hash.short(data: span(byte)): usize <inline>
+  return lhash(data.data, data.size, (@usize)(0x9e3779b9), 1)
+end
+
+--[[
+Hashes a span of bytes, iterating at most 32 bytes evenly spaced.
+This function can be fast to hash long spans, at cost of hash quality.
+]]
+function hash.long(data: span(byte)): usize <inline>
+  return lhash(data.data, data.size, (@usize)(0x9e3779b9), (data.size >> 5) + 1)
+end
+
+-- Returns the combination of the hashes `seed` and `value`.
+function hash.combine(seed: usize, value: usize): usize <inline>
+  return seed ~ (value + (@usize)(0x9e3779b9) + (seed<<6) + (seed>>2))
+end
+
+--[[
+Hashes value `v`, used to hash anything.
+
+To customize a hash for a specific record you can define `__hash` metamethod,
+and it will be used when calling this function.
+]]
+function hash.hash(v: auto): usize <nosideeffect>
+  ## if v.type.is_pointer then
+    ## if v.type.subtype and v.type.subtype.size and v.type.subtype.size > 0 then
+    -- use subtype information to shift
+    return (@usize)(v) >> #[math.log(1+v.type.subtype.size, 2)//1]#
+    ## else
+    -- usually pointers allocated by malloc() are multiple of 16, thus we can discard the last 4 bits
+    return ((@usize)(v) >> 4)
+    ## end
+  ## elseif v.type.is_integral then
+    return (@usize)(v)
+  ## elseif v.type.is_float then
+    ## linklib 'm'
+    ## if v.type.is_cfloat then
+    local function frexp(x: cfloat, exp: *cint): cfloat <cimport'frexpf',cinclude'<math.h>',nosideeffect> end
+    ## else
+    local function frexp(x: cdouble, exp: *cint): cdouble <cimport'frexp',cinclude'<math.h>',nosideeffect> end
+    ## end
+    if v == 0 or v ~= v or v == #[math.huge]# or v == -#[math.huge]# then -- 0 or non finite
+      return 0
+    end
+    local ne: cint
+    v = frexp(v, &ne) * -(#[primtypes.isize.min]#)
+    local u: usize = (@usize)(v) + (@usize)(ne)
+    return u < (@usize)(#[primtypes.isize.max]#) and u or ~u
+  ## elseif v.type.is_boolean then
+    return v and 1 or 0
+  ## elseif v.type.is_string then
+    return hash.long({data=v.data, size=v.size})
+  ## elseif v.type.is_span then
+    local T: type = #[v.type.subtype]#
+    return hash.long({data=(@*[0]byte)(v.data), size=(@usize)(#T * #v)})
+  ## elseif v.type.is_record and v.type.metafields.__hash then
+    return v:__hash()
+  ## elseif v.type.is_union then
+    return hash.long({data=(@*[0]byte)(&v), size=# #[v.type]#})
+  ## elseif v.type.is_record then
+    local h: usize
+    ## for i,field in ipairs(v.type.fields) do -- hash all fields
+      local hf: usize = hash.hash(v.#|field.name|#)
+      ## if i == 1 then
+        h = hf
+      ## else
+        h = hash.combine(h, hf)
+      ## end
+    ## end
+    return h
+  ## elseif v.type.is_array then
+    local h: usize = 0
+    if #v > 0 then -- hash all elements
+      h = hash.hash(v[0])
+      for i:isize=1,<#v do
+        h = hash.combine(h, hash.hash(v[i]))
+      end
+    end
+    return h
+  ## elseif v.type.is_nilptr or v.type.is_niltype then
+    return 0
+  ## else static_error("cannot hash type '%s'", v.type) end
+end
+
+return hash

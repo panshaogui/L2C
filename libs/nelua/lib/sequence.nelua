@@ -1,0 +1,326 @@
+--[[
+The sequence library provides a dynamic sized array of values,
+like vector, but with the following semantics:
+
+* Its elements starts at position 1 and go up to its length (like lua tables).
+* Internally it just contains a pointer,
+thus the list itself is passed by reference by default (like lua tables again).
+* Indexing the next elements after the end makes the sequence grow automatically.
+* Any failure when growing a sequence raises an error.
+
+A sequence is typically used as a more efficient table that
+can hold only sequences of a fixed value type.
+
+Remarks: A sequence initialized from a list of unnamed fields is filled with the list elements.
+]]
+
+require 'memory'
+require 'span'
+
+## local function make_sequenceT(T, Allocator)
+  ## static_assert(traits.is_type(T), "invalid type '%s'", T)
+  ## if not Allocator then
+  require 'allocators.default'
+  ## Allocator = DefaultAllocator
+  ## end
+
+  local Allocator: type = #[Allocator]#
+  local T: type = @#[T]#
+
+  -- Sequence implementation record.
+  local sequenceimplT: type <nickname(#[string.format('sequenceimpl(%s)', T)]#)> = @record{
+    data: span(T),
+    size: usize
+  }
+
+  -- Sequence record defined when instantiating the generic `sequence` with type `T`.
+  local sequenceT: type <nickname(#[string.format('sequence(%s)', T)]#)> = @record{
+    impl: *sequenceimplT,
+    allocator: Allocator
+  }
+
+  ##[[
+  local sequenceT = sequenceT.value
+  sequenceT.is_contiguous = true
+  sequenceT.is_container = true
+  sequenceT.is_sequence = true
+  sequenceT.is_oneindexing = true -- used in 'ipairs'
+  sequenceT.subtype = T
+  ]]
+
+  -- Concept matching fixed arrays of T.
+  local an_arrayT: type = #[concept(function(x)
+    -- if x.type:is_array_of(T) then
+    --   return types.PointerType(x.type)
+    -- end
+    if x.type:is_contiguous_of(T) then
+      return true
+    end
+    return false, string.format("no viable conversion from '%s' to '%s'", x.type, sequenceT)
+  end, function(node)
+    if node.is_InitList and #node > 0 and not node:find_child_with_field('is_Pair') then
+      return node.tag == 'InitList' and types.ArrayType(T, #node)
+    end
+  end)]#
+
+  --[[
+  Initializes sequence internal implementation if not initialized yet.
+  This is already implicitly called by other sequence functions when needed.
+  ]]
+  function sequenceT:_init(): void
+    if likely(self.impl) then return end
+    self.impl = self.allocator:new(@sequenceimplT)
+  end
+
+  --[[
+  Create a sequence using a custom allocator instance.
+  Useful only when using instanced allocators.
+  ]]
+  function sequenceT.make(allocator: Allocator): sequenceT
+    local seq: sequenceT
+    seq.allocator = allocator
+    return seq
+  end
+
+  --[[
+  Removes all elements from the sequence.
+  The internal storage buffer is not freed, and it may be reused.
+  ]]
+  function sequenceT:clear(): void
+    if not self.impl then return end
+    self.impl.size = 0
+  end
+
+  --[[
+  Free sequence resources and resets it to a zeroed state.
+  Useful only when not using the garbage collector.
+  ]]
+  function sequenceT:destroy(): void
+    if not self.impl then return end
+    self.allocator:spandealloc(self.impl.data)
+    self.allocator:delete(self.impl)
+    self.impl = nilptr
+  end
+
+  -- Effectively the same as `destroy`, called when a to-be-closed variable goes out of scope.
+  function sequenceT:__close(): void
+    self:destroy()
+  end
+
+  -- Reserve at least `n` elements in the sequence storage.
+  function sequenceT:reserve(n: usize): void
+    self:_init()
+    local cap: usize = n + 1
+    local curcap: usize = self.impl.data.size
+    if curcap >= cap then return end
+    self.impl.data = self.allocator:xspanrealloc(self.impl.data, cap)
+    if unlikely(curcap == 0) then self.impl.data[0] = T() end
+  end
+
+  --[[
+  Resizes the sequence so that it contains `n` elements.
+  When expanding new elements are zero initialized.
+  ]]
+  function sequenceT:resize(n: usize): void
+    self:reserve(n)
+    if n > self.impl.size then
+      memory.zero(&self.impl.data[self.impl.size+1], (n-self.impl.size) * #T)
+    end
+    self.impl.size = n
+  end
+
+  -- Returns a shallow copy of the sequence, allocating a new sequence.
+  function sequenceT:copy(): sequenceT
+    local clone: sequenceT
+    if self.impl then
+      clone:_init()
+      clone.impl.data = self.allocator:xspanalloc(@T, self.impl.data.size)
+      clone.impl.size = self.impl.size
+      memory.spancopy(clone.impl.data, self.impl.data)
+    end
+    clone.allocator = self.allocator
+    return clone
+  end
+
+  -- Grow sequence storage to accommodate at least one more element, used internally.
+  local function sequenceT_grow(self: *sequenceT): void <noinline>
+    local cap: usize = 2
+    local curcap: usize = self.impl.data.size
+    if likely(curcap ~= 0) then
+      cap = curcap * 2
+      check(cap > curcap, 'capacity overflow')
+    end
+    self.impl.data = self.allocator:xspanrealloc(self.impl.data, cap)
+    if unlikely(curcap == 0) then self.impl.data[0] = T() end
+  end
+
+  -- Inserts elements `v` at the end of the sequence.
+  function sequenceT:push(v: T): void <inline>
+    self:_init()
+    self.impl.size = self.impl.size + 1
+    if unlikely(self.impl.size + 1 >= self.impl.data.size) then
+      sequenceT_grow(self)
+    end
+    self.impl.data[self.impl.size] = v
+  end
+
+  --[[
+  Removes the last element in the sequence and returns its value.
+  The sequence must not be empty.
+  ]]
+  function sequenceT:pop(): T <inline>
+    assert(self.impl ~= nilptr and self.impl.size > 0, 'attempt to pop an empty sequence')
+    local ret: T = self.impl.data[self.impl.size]
+    self.impl.size = self.impl.size - 1
+    return ret
+  end
+
+  --[[
+  Inserts element `v` at position `pos` in the sequence.
+  Elements with position greater or equal than `pos` are shifted up.
+  The `pos` must be valid (within sequence bounds).
+  ]]
+  function sequenceT:insert(pos: usize, v: T): void
+    self:_init()
+    assert(pos > 0 and pos <= self.impl.size + 1, 'position out of bounds')
+    if unlikely(self.impl.size + 2 >= self.impl.data.size) then
+      sequenceT_grow(self)
+    end
+    self.impl.size = self.impl.size + 1
+    if self.impl.size > pos then
+      memory.move(&self.impl.data[pos + 1], &self.impl.data[pos], (self.impl.size - pos) * #T)
+    end
+    self.impl.data[pos] = v
+  end
+
+  --[[
+  Removes element at position `pos` in the sequence and returns its value.
+  Elements with position greater than `pos` are shifted down.
+  The `pos` must be valid (within sequence bounds).
+  ]]
+  function sequenceT:remove(pos: usize): T
+    assert(self.impl ~= nilptr and self.impl.size > 0 and pos <= self.impl.size, 'position out of bounds')
+    local ret: T = self.impl.data[pos]
+    if self.impl.size > pos then
+      memory.move(&self.impl.data[pos], &self.impl.data[pos+1], (self.impl.size - pos) * #T)
+    end
+    self.impl.size = self.impl.size - 1
+    return ret
+  end
+
+  --[[
+  Removes the first item from the sequence whose value is `v`.
+  The remaining elements are shifted.
+  Returns `true` if the item was removed, otherwise `false`.
+  ]]
+  function sequenceT:removevalue(v: T): boolean
+    if not self.impl then return false end
+    for i:usize=1,self.impl.size do
+      if self.impl.data[i] == v then
+        self:remove(i)
+        return true
+      end
+    end
+    return false
+  end
+
+  --[[
+  Removes all elements from the sequence where `pred` function returns `true`.
+  The remaining elements are shifted.
+  ]]
+  function sequenceT:removeif(pred: function(v: T): boolean): void
+    if not self.impl then return end
+    local j: usize = 1
+    for i:usize=1,self.impl.size do
+      if not pred(self.impl.data[i]) then
+        self.impl.data[j] = self.impl.data[i]
+        j = j + 1
+      end
+    end
+    self.impl.size = j - 1
+  end
+
+  -- Returns the number of elements the sequence can store before triggering a reallocation.
+  function sequenceT:capacity(): isize <inline>
+    if unlikely(not self.impl or self.impl.data.size == 0) then return 0 end
+    return (@isize)(self.impl.data.size) - 1
+  end
+
+  --[[
+  Returns reference to element at position `pos`.
+  If `pos` is the sequence size plus 1, then a zeroed element is added and return its reference.
+  Argument `pos` must be at most the sequence size plus 1.
+  The reference will remain valid until the sequence grows.
+  Used when indexing elements with square brackets (`[]`).
+  ]]
+  function sequenceT:__atindex(pos: usize): *T <inline>
+    self:_init()
+    if unlikely(pos > self.impl.size) then
+      assert(pos == self.impl.size + 1, 'position out of bounds')
+      self.impl.size = self.impl.size + 1
+      if unlikely(self.impl.size + 1 > self.impl.data.size) then
+        sequenceT_grow(self)
+      end
+      self.impl.data[pos] = T()
+    elseif unlikely(self.impl.data.size == 0 and pos == 0) then
+      sequenceT_grow(self)
+    end
+    return &self.impl.data[pos]
+  end
+
+  --[[
+  Returns the number of elements in the sequence.
+  It never counts the element at position `0`.
+  Used by the length operator (`#`).
+  ]]
+  function sequenceT:__len(): isize <inline>
+    if unlikely(not self.impl) then return 0 end
+    return (@isize)(self.impl.size)
+  end
+
+  --[[
+  Initializes sequence elements from a fixed array.
+  Used to initialize sequence elements with curly braces (`{}`).
+  ]]
+  function sequenceT.__convert(values: an_arrayT): sequenceT <inline>
+    local self: sequenceT
+    self:reserve(#values)
+    self.impl.size = #values
+    for i:usize=1,#values do
+      self.impl.data[i] = values[i-1]
+    end
+    return self
+  end
+
+  --[[
+  Returns the sequence elements from `i` to `j`.
+  Both `i` and `j` must be known at compile-time.
+
+  This function is equivalent to
+  ```
+  return seq[i], seq[i+1], ..., seq[j]
+  ```
+  ]]
+  function sequenceT:unpack(i: isize <comptime>, j: isize <comptime>) <inline>
+    ## local rets = {}
+    assert(i >= 1 and j <= #self and i <= j, 'unpack out of range')
+    ## for k=i.value,j.value do
+      local #|'v'..k|#: T = self[#[k]#]
+      ## table.insert(rets, aster.Id{'v'..k})
+    ## end
+    return #[aster.unpack(rets)]#
+  end
+
+  ## return sequenceT
+## end
+
+--[[
+Generic used to instantiate a sequence type in the form of `sequence(T, Allocator)`.
+
+Argument `T` is the value type that the sequence will store.
+Argument `Allocator` is an allocator type for the container storage,
+in case absent then `DefaultAllocator` is used.
+]]
+global sequence: type = #[generalize(make_sequenceT)]#
+
+return sequence

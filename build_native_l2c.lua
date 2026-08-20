@@ -3,127 +3,136 @@
 -- L2C: Transpile Typed Lua into 0-GC Native C for HFT and Embedded Systems.
 -- ==============================================================================
 
--- build_native_l2c.lua：盗梦空间级 C 语言外壳嵌入器
-local function get_files(dir)
-    local p = io.popen('find "'..dir..'" -type f -name "*.lua" 2>/dev/null')
-    local files = {}
-    if p then
-        for file in p:lines() do table.insert(files, file) end
-        p:close()
+local IS_WINDOWS = package.config:sub(1,1) == "\\"
+
+print(" [L2C Super Forge] 启动跨平台绝对主权单体锻造...")
+
+local function get_files(dir, ext)
+    local t = {}
+    local cmd = IS_WINDOWS and ('dir /S /B /A:-D "' .. dir:gsub("/", "\\") .. '" 2>nul') or ('find ' .. dir .. ' -type f 2>/dev/null')
+    local f = io.popen(cmd)
+    if f then
+        for line in f:lines() do
+            if not ext or line:match(ext) then table.insert(t, (line:gsub("\\", "/"))) end
+        end
+        f:close()
     end
-    return files
+    return t
 end
 
--- 搜索 Teal 源码的函数
-local function get_tl_files(dir)
-    local p = io.popen('find "'..dir..'" -type f -name "*.tl" 2>/dev/null')
-    local files = {}
-    if p then for file in p:lines() do table.insert(files, file) end p:close() end
-    return files
+-- 准备所有的源文件
+local preload_files = {} -- 需要放入 package.preload 的 Lua 代码
+local vfs_files = {}     -- 需要放入 L2C_VFS 的资源文件
+
+local function add_preload(mod_name, path)
+    local f = io.open(path, "r"); if not f then print(" 找不到 " .. path); os.exit(1) end
+    table.insert(preload_files, { mod = mod_name, code = f:read("*a"), path = path })
+    f:close()
+    print(" -> 已物理封印外部库/模块: " .. mod_name)
 end
 
-print("==================================================")
-print(" 1. 正在提取 L2C 核心引擎与器官并焊入 Preload 矩阵...")
-print("==================================================")
+-- 1. 物理封印本地 libs/ 目录下的依赖，彻底切断对宿主机全局环境的依赖！
+add_preload("tl", "libs/tl.lua")
+add_preload("inspect", "libs/inspect.lua")
 
-local bundled_code = "L2C_VFS = {}\n" -- 初始化虚拟文件系统
-
---  [自依赖降维打击]：自动在当前系统中寻找 tl 和 inspect 的源码物理位置，生吞它们！
-local function bundle_vendor(mod_name)
-    local path = package.searchpath(mod_name, package.path)
-    if not path then
-        print(" 致命错误：本机找不到依赖库 " .. mod_name)
-        os.exit(1)
+-- 2. 封印 L2C 引擎与 Nelua 核心
+for _, dir in ipairs({"codegen", "l2c_cli"}) do
+    for _, p in ipairs(get_files(dir, "%.lua$")) do
+        local mod = p:gsub("^%./", ""):gsub("/", "."):gsub("%.lua$", "")
+        add_preload(mod, p)
     end
-    local f = io.open(path, "r")
-    local code = f:read("*a")
-    f:close()
-    bundled_code = bundled_code .. string.format("package.preload['%s'] = function()\n%s\nend\n", mod_name, code)
-    print(" -> 已物理封印外部库: " .. mod_name .. " (来自 " .. path .. ")")
+end
+for _, p in ipairs(get_files("libs/nelua/lualib", "%.lua$")) do
+    local mod = p:gsub("^libs/nelua/lualib/", ""):gsub("%.lua$", ""):gsub("/", ".")
+    add_preload(mod, p)
+end
+-- L2C 核心入口
+add_preload("l2c", "l2c.lua")
+
+-- 3. 封印 VFS 标准库
+for _, p in ipairs(get_files("std")) do
+    local f = io.open(p, "r"); table.insert(vfs_files, { path = p, code = f:read("*a") }); f:close()
+    print(" -> 已物理封印 VFS 库: " .. p)
+end
+for _, p in ipairs(get_files("libs/nelua/lib")) do
+    local vfs_path = p:gsub("^libs/nelua/", "")
+    local f = io.open(p, "r"); table.insert(vfs_files, { path = vfs_path, code = f:read("*a") }); f:close()
 end
 
-bundle_vendor("tl")
-bundle_vendor("inspect")
+-- ============================================================================
+-- 生成 C 源码文件 l2c_main.c
+-- ============================================================================
+print("\n  正在将所有源码编译为 C 字节数组 (luaL_loadbuffer 安全模式)...")
+local out = io.open("l2c_main.c", "w")
 
-local files = get_files("codegen")
-for _, path in ipairs(files) do
-    -- 兼容不管是 codegen/ 还是 compiler/codegen/
-    local mod_name = path:gsub("^%./", ""):gsub("/", "."):gsub("%.lua$", "")
-    local f = io.open(path, "r")
-    local code = f:read("*a")
-    f:close()
-    
-    -- 注入双重复写，确保不管是用 require("codegen.xxx") 还是 require("xxx") 都能精准击中
-    bundled_code = bundled_code .. string.format("package.preload['%s'] = function()\n%s\nend\n", mod_name, code)
-    local short_name = mod_name:gsub("^codegen%.", "")
-    if short_name ~= mod_name then
-        bundled_code = bundled_code .. string.format("package.preload['%s'] = package.preload['%s']\n", short_name, mod_name)
-    end
-    print(" -> 已物理封印器官: " .. mod_name)
-end
-
-local cli_files = get_files("l2c_cli")
-for _, path in ipairs(cli_files) do
-    local mod_name = path:gsub("^%./", ""):gsub("/", "."):gsub("%.lua$", "")
-    local f = io.open(path, "r")
-    local code = f:read("*a")
-    f:close()
-    bundled_code = bundled_code .. string.format("package.preload['%s'] = function()\n%s\nend\n", mod_name, code)
-    print(" -> 已物理封印 L2C CLI: " .. mod_name)
-end
-
-local std_files = get_tl_files("std")
-for _, path in ipairs(std_files) do
-    local f = io.open(path, "r")
-    local code = f:read("*a")
-    f:close()
-    -- 使用 %q 安全转义所有换行、引号等特殊字符，存入 L2C_VFS 内存表！
-    bundled_code = bundled_code .. string.format("L2C_VFS['%s'] = %q\n", path, code)
-    print(" -> 已物理封印 STD 库 (VFS): " .. path)
-end
-
--- 封印主入口
-local f_main = io.open("l2c.lua", "r")
-bundled_code = bundled_code .. "\n-- [[ L2C 主引擎核心入口 ]] \n" .. f_main:read("*a")
-f_main:close()
-
-print("\n 2. 正在将 Lua 源码编码为纯 C 物理字节流 (防转义逃逸)...")
-local c_hex = {}
-for i = 1, #bundled_code do
-    table.insert(c_hex, string.format("0x%02x", string.byte(bundled_code, i)))
-end
-local c_payload = table.concat(c_hex, ", ")
-
-print(" 3. 正在锻造 C 语言物理外壳...")
-local c_code = string.format([[
+out:write([[
 #include <stdio.h>
 #include <stdlib.h>
 #include <lua.h>
 #include <lualib.h>
 #include <lauxlib.h>
 
-// 物理封印的 L2C 编译器本体字节流
-static const unsigned char l2c_payload[] = { %s, 0x00 };
+int luaopen_lpeglabel(lua_State *L);
+int luaopen_lfs(lua_State *L);
+int luaopen_sys(lua_State *L);
+int luaopen_hasher(lua_State *L);
 
+static void l2c_preload_assets(lua_State *L) {
+    luaL_dostring(L, "_G.L2C_VFS = {}");
+]])
+
+local all_assets = {}
+for _, v in ipairs(preload_files) do table.insert(all_assets, v) end
+for _, v in ipairs(vfs_files) do table.insert(all_assets, v) end
+
+-- 写入十六进制数组
+for i, asset in ipairs(all_assets) do
+    out:write(string.format("  static const unsigned char f_%d[] = {", i))
+    for j = 1, #asset.code do out:write(string.format("0x%02x,", string.byte(asset.code, j))) end
+    out:write("0x00};\n")
+    
+    if asset.mod then
+        out:write(string.format('  lua_getglobal(L, "package"); lua_getfield(L, -1, "preload");\n'))
+        out:write(string.format('  luaL_loadbuffer(L, (const char*)f_%d, %d, "@%s");\n', i, #asset.code, asset.path))
+        out:write(string.format('  lua_setfield(L, -2, "%s"); lua_pop(L, 2);\n', asset.mod))
+        
+        -- 双重复写兼容
+        local short_name = asset.mod:gsub("^codegen%.", ""):gsub("^l2c_cli%.", "")
+        if short_name ~= asset.mod then
+            out:write(string.format('  lua_getglobal(L, "package"); lua_getfield(L, -1, "preload");\n'))
+            out:write(string.format('  lua_getfield(L, -1, "%s"); lua_setfield(L, -2, "%s"); lua_pop(L, 2);\n', asset.mod, short_name))
+        end
+    else
+        out:write(string.format('  lua_getglobal(L, "L2C_VFS");\n'))
+        out:write(string.format('  lua_pushlstring(L, (const char*)f_%d, %d);\n', i, #asset.code))
+        out:write(string.format('  lua_setfield(L, -2, "%s"); lua_pop(L, 1);\n', asset.path))
+    end
+end
+
+out:write("}\n\n")
+
+-- 写入主函数
+out:write([[
 int main(int argc, char** argv) {
-    // 物理拉起 Lua 虚拟机
     lua_State *L = luaL_newstate();
     luaL_openlibs(L);
 
-    //  核心桥接校准：对齐标准 Lua 的全局 arg 表
-    // arg[-1] = 解释器(不填), arg[0] = 脚本/可执行文件本身, arg[1] = 第一个参数
+    luaL_requiref(L, "lpeglabel", luaopen_lpeglabel, 1); lua_pop(L, 1);
+    luaL_requiref(L, "lfs", luaopen_lfs, 1); lua_pop(L, 1);
+    luaL_requiref(L, "sys", luaopen_sys, 1); lua_pop(L, 1);
+    luaL_requiref(L, "hasher", luaopen_hasher, 1); lua_pop(L, 1);
+
     lua_newtable(L);
     for(int i = 0; i < argc; i++) {
         lua_pushstring(L, argv[i]);
-        // C 语言的 argv[0] 对应 Lua 的 arg[0]
-        // C 语言的 argv[1] 对应 Lua 的 arg[1]，以此类推
         lua_rawseti(L, -2, i); 
     }
     lua_setglobal(L, "arg");
 
-    // 唤醒 L2C 编译器
-    if (luaL_dostring(L, (const char*)l2c_payload) != LUA_OK) {
-        fprintf(stderr, " L2C 内核崩溃: %%s\n", lua_tostring(L, -1));
+    l2c_preload_assets(L);
+
+    if (luaL_dostring(L, "require('l2c')") != LUA_OK) {
+        fprintf(stderr, " L2C 内核崩溃: %s\n", lua_tostring(L, -1));
         lua_close(L);
         return 1;
     }
@@ -131,35 +140,52 @@ int main(int argc, char** argv) {
     lua_close(L);
     return 0;
 }
-]], c_payload)
+]])
+out:close()
 
-local f_c = io.open("l2c_main.c", "w")
-f_c:write(c_code)
-f_c:close()
+-- ============================================================================
+-- 阶段 3：执行 GCC/Clang 熔炼 (真正的 100% 源码级自举，0 系统依赖！)
+-- ============================================================================
+print("\n  召唤 C 编译器进行终极封测...")
 
-print(" 4. 召唤 Clang/GCC 编译器进行终极封测...")
+-- 1. 动态搜集所有 C 语言原材料 (包括完整的 Lua 虚拟机源码！)
+local c_sources = {
+    "l2c_main.c",
+    "clib/nelua_runtime/lfs.c",
+    "clib/nelua_runtime/hasher.c",
+    "clib/nelua_runtime/sys.c"
+}
 
---  跨平台探针弹匣：涵盖 Mac 静态/动态，以及 Alpine(Musl) / Ubuntu(Glibc)
---  跨平台探针弹匣：新增去除了 -flto 的终极降级方案，以及覆盖不同命名的 lua 链接参数
+-- 核心修复 1：把刚才遗忘的 Lua 内核源码重新加进来！(排除自带 main 的 lua.c 和 luac.c)
+for _, f in ipairs(get_files("clib/nelua_runtime/lua", "%.c$")) do
+    if not f:match("lua%.c$") and not f:match("luac%.c$") then 
+        table.insert(c_sources, f) 
+    end
+end
+
+-- 核心修复 2：搜集 LPeg 源码
+for _, f in ipairs(get_files("clib/nelua_runtime/lpeglabel", "%.c$")) do
+    table.insert(c_sources, f)
+end
+
+local all_c_src = table.concat(c_sources, " ")
+
+-- 核心修复 3：头文件包含路径，只指向我们自己的 clib 目录！绝不使用系统的 /opt 路径！
+local includes = "-Iclib/nelua_runtime/lua -Iclib/nelua_runtime/lpeglabel"
+local libs = IS_WINDOWS and "" or "-lm -ldl"
+local out_bin = IS_WINDOWS and "l2c_bin.exe" or "l2c_bin"
+
+-- 终极纯净弹匣：完全独立于系统环境！只要有 gcc/clang 就能成功！
 local compile_cmds = {
-    -- 1. Mac Homebrew 极限静态/动态
-    "clang -O3 -flto l2c_main.c /opt/homebrew/lib/liblua.a -o l2c_bin -I/opt/homebrew/include/lua -I/opt/homebrew/include 2>/dev/null",
-    "clang -O3 -flto l2c_main.c -o l2c_bin -L/opt/homebrew/lib -I/opt/homebrew/include/lua -I/opt/homebrew/include -llua 2>/dev/null",
-    
-    -- 2.  Alpine Linux (Musl) 物理坐标级绝对静态封印！(追加 -static 彻底斩断 libc 依赖)
-    "clang -O3 -flto l2c_main.c /usr/lib/lua5.4/liblua.a -o l2c_bin -I/usr/include/lua5.4 -I/usr/include/lua -static -lm 2>/dev/null",
-    "gcc -O3 -flto l2c_main.c /usr/lib/lua5.4/liblua.a -o l2c_bin -I/usr/include/lua5.4 -I/usr/include/lua -static -lm 2>/dev/null", 
-
-    -- 3. Alpine/Ubuntu Linux 传统静态封印
-    "clang -O3 -flto l2c_main.c -o l2c_bin -I/usr/include/lua5.4 -I/usr/include/lua -static -llua5.4 -lm 2>/dev/null",
-    "clang -O3 -flto l2c_main.c -o l2c_bin -I/usr/include/lua5.4 -I/usr/include/lua -static -llua -lm 2>/dev/null",
-    
-    -- 4. Alpine/Ubuntu 动态链接 (去除 -flto 防止 LTO 插件缺失报错！)
-    "clang -O3 l2c_main.c -o l2c_bin -L/usr/lib/lua5.4 -I/usr/include/lua5.4 -I/usr/include/lua -llua -lm 2>/dev/null",
-    "gcc -O3 l2c_main.c -o l2c_bin -L/usr/lib/lua5.4 -I/usr/include/lua5.4 -I/usr/include/lua -llua -lm 2>/dev/null"
+    string.format("clang -O3 -flto %s %s %s -o %s 2>/dev/null", includes, all_c_src, libs, out_bin),
+    string.format("gcc -O3 -flto %s %s %s -o %s 2>/dev/null", includes, all_c_src, libs, out_bin),
+    -- 去除 LTO 的安全降级版本
+    string.format("clang -O3 %s %s %s -o %s 2>/dev/null", includes, all_c_src, libs, out_bin),
+    string.format("gcc -O3 %s %s %s -o %s 2>/dev/null", includes, all_c_src, libs, out_bin)
 }
 
 local res = false
+local last_cmd = ""
 for _, cmd in ipairs(compile_cmds) do
     print("    探针射击: " .. cmd:gsub(" 2>/dev/null", ""))
     local status = os.execute(cmd)
@@ -167,12 +193,14 @@ for _, cmd in ipairs(compile_cmds) do
         res = true
         break
     end
+    last_cmd = cmd:gsub(" 2>/dev/null", "")
 end
 
 if res then
     os.execute("rm l2c_main.c")
-    print("\n 盗梦空间完美闭环！独立的 L2C 原生二进制已生成: ./l2c_bin")
-    os.execute("ls -lh l2c_bin | awk '{print \" 物理体积: \" $5}'")
+    print("\n 盗梦空间完美闭环！独立的 L2C 原生二进制已生成: ./" .. out_bin)
 else
-    print(" 编译失败。请尝试手动运行 Clang 并检查您的 Lua 头文件与链接库路径。")
+    print("\n [致命错误] 所有编译探针均失效！底层 C 编译器原始报错如下：")
+    os.execute(last_cmd)
+    os.exit(1)
 end

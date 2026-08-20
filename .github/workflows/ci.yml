@@ -13,60 +13,52 @@ on:
 
 jobs:
   # ==========================================
-  # 🏭 阶段一：全平台矩阵并发编译 (Matrix Build)
+  # 阶段一：全平台矩阵并发编译 (Matrix Build)
   # ==========================================
   build:
     name: Build on ${{ matrix.os }}
-    # 🎯 开启矩阵分发：同时拉起 Linux(X64) 和 macOS(Apple Silicon ARM64)
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-22.04, macos-14]
 
     steps:
-    - name: 📥 检出代码 (Checkout)
+    - name:  检出代码 (Checkout)
       uses: actions/checkout@v4
 
-    - name: ⚙️ 安装底层依赖 (Linux 分支)
+    - name:  安装极简底层依赖 (Linux 分支)
       if: runner.os == 'Linux'
       run: |
         sudo apt-get update
-        sudo apt-get install -y lua5.4 liblua5.4-dev luarocks clang gcc make git
+        # 极客减负：再也不需要 luarocks, tl, inspect 和 nelua！只要基础环境！
+        sudo apt-get install -y lua5.4 clang gcc make
         sudo ln -sf /usr/bin/lua5.4 /usr/bin/lua
-        sudo luarocks --lua-version=5.4 install argparse
-        sudo luarocks --lua-version=5.4 install tl --nodeps
-        sudo luarocks --lua-version=5.4 install inspect
 
-    - name: ⚙️ 安装底层依赖 (macOS 分支)
+    - name:  安装极简底层依赖 (macOS 分支)
       if: runner.os == 'macOS'
       run: |
         brew update
-        brew install lua luarocks
-        # 🔥 [精准解绑]：Mac 的 Homebrew 默认就是 5.4，去掉画蛇添足的版本限制！
-        luarocks install argparse
-        luarocks install tl --nodeps
-        luarocks install inspect
+        # 极客减负：Mac 端也仅需一个最纯净的 Lua 解释器！
+        brew install lua
 
-    - name: 🧠 编译部署 Nelua 物理降维引擎
+    - name:  锻造独立二进制本体 (Build)
       run: |
-        git clone https://github.com/edubart/nelua-lang.git /tmp/nelua
-        cd /tmp/nelua
-        make
-        sudo make install
+        echo " 执行盗梦空间元编译..."
+        lua build_native_l2c.lua
+        # 此时生成了 l2c_bin，千万不要在这里重命名，否则接下来的测试找不到它！
 
-    - name: 🧪 执行 TDD 护城河测试 (全平台并发测试)
+    - name:  执行 TDD 护城河测试 (Test)
       run: |
-        echo "🚀 启动 L2C 全自动测试总线..."
+        echo " 启动 L2C 全自动测试总线..."
+        # 此时它会完美调用刚刚生成的 ./l2c_bin 进行测试！
         lua test_runner.lua
 
-    - name: 📦 锻造独立二进制本体 (重命名防冲突)
+    - name:  重命名并归档产物 (Archive)
       run: |
-        echo "⚡ 执行盗梦空间元编译..."
-        lua build_native_l2c.lua
-        # 物理重命名：区分平台与架构，例如 l2c_bin_Linux_X64
+        # 测试通过后，重命名以防 GitHub Artifacts 名字冲突
         mv l2c_bin l2c_bin_${{ runner.os }}_${{ runner.arch }}
 
-    - name: 📤 临时存储 Artifacts
+    - name:  临时存储 Artifacts
       uses: actions/upload-artifact@v4
       with:
         name: l2c-compiler-${{ runner.os }}-${{ runner.arch }}
@@ -74,24 +66,23 @@ jobs:
         retention-days: 1
 
   # ==========================================
-  # 🚀 阶段二：终极自动发版 (Release)
+  # 阶段二：终极自动发版 (Release)
   # ==========================================
   release:
-    name: 🌐 自动推送到 GitHub Releases
+    name:  自动推送到 GitHub Releases
     needs: build
-    # 🛡️ 只有当你打了形如 v1.0.0 的 tag 时，才会触发这个发版车间
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-    - name: 📥 下载所有平台的编译产物
+    - name:  下载所有平台的编译产物
       uses: actions/download-artifact@v4
       with:
         path: artifacts
         merge-multiple: true
 
-    - name: 📢 创建 Release 页面并挂载二进制武器
+    - name:  创建 Release 页面并挂载二进制武器
       uses: softprops/action-gh-release@v2
       with:
         files: artifacts/l2c_bin_*

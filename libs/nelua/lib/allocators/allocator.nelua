@@ -1,0 +1,367 @@
+--[[
+Allocator interface library provides common functions implemented on every allocator.
+
+This library is not an allocator by itself, but it's used by other
+allocators.
+
+* A method with '0' suffix initializes the memory with zeros.
+* A method with 'x' prefix raises an error in case of an allocation failure.
+* A method with 'span' prefix returns a span, instead of a pointer.
+
+Allocation failures usually happen when running out of memory.
+]]
+
+require 'memory'
+require 'span'
+
+-- Flags for new allocations.
+global AllocatorFlags: type = @enum(usize){
+  GCRoot = 1 << 17, -- Allocation always scanned and never collected.
+  GCLeaf = 1 << 18, -- Allocation never scanned (contains no pointers).
+  GCBranch = 1 << 19, -- Allocation should be scanned despite being detected as leaf (contains pointers).
+  GCExtern = 1 << 20, -- External allocation, finalizers should be called, however deallocation is disabled.
+}
+
+## function Allocator_parse_type_flags(flags, T)
+  ## if not pragmas.nogc and not T.value:has_pointer() then
+    ## if flags.type.is_niltype then
+    local flags: usize = AllocatorFlags.GCLeaf
+    ## else
+    if flags & AllocatorFlags.GCBranch == 0 then -- explicitly marked as a reference branch
+      flags = flags | AllocatorFlags.GCLeaf
+    end
+    ## end
+  ## end
+## end
+
+-- Macro that when called it implements common allocation methods.
+## function Allocator_implement_interface(Allocator)
+  ## Allocator.value.is_allocator = true
+
+  -- The allocator type which the allocator interface will implements the methods.
+  local Allocator: type = #[Allocator]#
+
+  -- Concept to checking whether an input type is a span.
+  local span_concept: type = #[concept(function(x) return x.type.is_span end)]#
+
+  -- Concept to checking whether an input type is a span or a pointer.
+  local deleteable_concept: type = #[concept(function(x)
+    if x.type.is_pointer or x.type.is_span then
+      return true
+    end
+    return false, string.format("type '%s' is not a span or a pointer", x.type)
+  end)]#
+
+  ## if not Allocator.value.metafields.alloc then
+  --[[
+  Allocates `size` bytes and returns a pointer of the allocated memory block.
+
+  - The allocated memory is not initialized.
+  - If `size` is zero or the operation fails, then returns `nilptr`.
+  - If `flags` is present, then it is passed as flags to the underlying allocator.
+  ]]
+  function Allocator:alloc(size: usize, flags: facultative(usize)): pointer
+    -- this method will actually be overridden
+    return nilptr
+  end
+  ## end
+
+  -- Like `alloc`, but raises an error in case the allocation fails.
+  function Allocator:xalloc(size: usize, flags: facultative(usize)): pointer
+    local p: pointer = self:alloc(size, flags)
+    if unlikely(p == nilptr and size > 0) then panic('out of memory') end
+    return p
+  end
+
+  ## if not Allocator.value.metafields.alloc0 then
+  -- Like `alloc`, but the allocated memory is initialized with zeros.
+  function Allocator:alloc0(size: usize, flags: facultative(usize)): pointer
+    local p: pointer = self:alloc(size, flags)
+    if likely(p ~= nilptr) then
+      memory.zero(p, size)
+    end
+    return p
+  end
+  ## end
+
+  -- Like `alloc0`, but raises an error in case the allocation fails.
+  function Allocator:xalloc0(size: usize, flags: facultative(usize)): pointer
+    local p: pointer = self:alloc0(size, flags)
+    if unlikely(p == nilptr and size > 0) then panic('out of memory') end
+    return p
+  end
+
+  ## if not Allocator.value.metafields.dealloc then
+  --[[
+  Deallocates the allocated memory block pointed by `p`.
+
+  - If `p` is `nilptr`, then no operation is performed.
+  - The `dealloc(p)` has been already been called before, then undefined behavior occurs.
+  - Unless `p` is `nilptr`,
+  it must have been returned by an earlier allocation call from this allocator.
+  ]]
+  function Allocator:dealloc(p: pointer): void
+    -- this method will actually be overridden
+  end
+  ## end
+
+  ## if not Allocator.value.metafields.realloc then
+  --[[
+  Changes the size of the memory block pointer by `p` from size `oldsize` bytes to `newsize` bytes.
+
+  - The allocated memory contents will be unchanged from the start of the region
+  up to the minimum of the `oldsize` and `newsize`.
+  - If `newsize` is larger than the `oldsize`, the added memory is not initialized.
+  - If `p` is `nilptr`, the call is equivalent to `alloc(newsize)`.
+  - If `newsize` is equal to `oldsize`, then no operation is performed.
+  - If `newsize` is zero, the call is equivalent to `dealloc(p)`.
+  - If the operation fails, then the original `p` is left untouched, it's not deallocated or moved,
+  and `nilptr` is returned.
+  - The returned pointer may be the same as `p` if the allocation was not moved,
+  or different from `p` if the allocation was moved to a new address.
+  - Unless `p` is `nilptr`,
+  it must have been returned by an earlier allocation call from this allocator.
+  ]]
+  function Allocator:realloc(p: pointer, newsize: usize, oldsize: usize): pointer
+    if unlikely(p == nilptr) then
+      return self:alloc(newsize)
+    elseif unlikely(newsize == 0) then
+      self:dealloc(p)
+      return nilptr
+    elseif unlikely(newsize == oldsize) then
+      return p
+    else -- shrinking or growing
+      local newp: pointer = self:alloc(newsize)
+      if likely(newp ~= nilptr) then
+        if oldsize > 0 then
+          -- copy the old size when growing or the new size when shrinking
+          local minsize: usize = oldsize
+          if newsize < oldsize then
+            minsize = newsize
+          end
+          -- use memmove because we don't really know if the memory can overlap
+          memory.move(newp, p, minsize)
+        end
+        self:dealloc(p)
+      end
+      return newp
+    end
+  end
+  ## end
+
+  -- Like `realloc`, but raises an error in case the allocation fails.
+  function Allocator:xrealloc(p: pointer, newsize: usize, oldsize: usize): pointer
+    local p: pointer = self:realloc(p, newsize, oldsize)
+    if unlikely(p == nilptr and newsize > 0) then panic('out of memory') end
+    return p
+  end
+
+  ## if not Allocator.value.metafields.realloc0 then
+  -- Like `realloc`, but initializes added memory with zeros.
+  function Allocator:realloc0(p: pointer, newsize: usize, oldsize: usize): pointer
+    p = self:realloc(p, newsize, oldsize)
+    if likely(newsize > oldsize and p ~= nilptr) then -- zero the grown part
+      memory.zero(&(@*[0]byte)(p)[oldsize], newsize - oldsize)
+    end
+    return p
+  end
+  ## end
+
+  -- Like `realloc0`, but raises an error in case the allocation fails.
+  function Allocator:xrealloc0(p: pointer, newsize: usize, oldsize: usize): pointer
+    local p: pointer = self:realloc0(p, newsize, oldsize)
+    if unlikely(p == nilptr and newsize > 0) then panic('out of memory') end
+    return p
+  end
+
+  ## if not Allocator.value.metafields.spanalloc then
+  --[[
+  Like `alloc`, but returns a span of `T` with `size` elements.
+
+  - The allocated memory region will have `size * #T` bytes.
+  - If the operation fails, then an empty span is returned.
+  ]]
+  function Allocator:spanalloc(T: type, size: usize, flags: facultative(usize)): auto
+    if likely(size > 0) then
+      ## Allocator_parse_type_flags(flags, T)
+      local data: *[0]T = (@*[0]T)(self:alloc(size * #T, flags))
+      if likely(data ~= nilptr) then
+        return (@span(T)){data=data,size=size}
+      end
+    end
+    return (@span(T)){}
+  end
+  ## end
+
+  -- Like `spanalloc`, but raises an error in case the allocation fails.
+  function Allocator:xspanalloc(T: type, size: usize, flags: facultative(usize)): auto
+    local s: span(T) = self:spanalloc(T, size, flags)
+    if unlikely(s.size ~= size) then panic('out of memory') end
+    return s
+  end
+
+  ## if not Allocator.value.metafields.spanalloc0 then
+  -- Like `spanalloc`, but initializes added memory with zeros.
+  function Allocator:spanalloc0(T: type, size: usize, flags: facultative(usize)): auto
+    if likely(size > 0) then
+      ## Allocator_parse_type_flags(flags, T)
+      local data: *[0]T = (@*[0]T)(self:alloc0(size * #T, flags))
+      if likely(data ~= nilptr) then
+        return (@span(T)){data=data,size=size}
+      end
+    end
+    return (@span(T)){}
+  end
+  ## end
+
+  -- Like `spanalloc0`, but raises an error in case the allocation fails.
+  function Allocator:xspanalloc0(T: type, size: usize, flags: facultative(usize)): auto
+    local s: span(T) = self:spanalloc0(T, size, flags)
+    if unlikely(s.size ~= size) then panic('out of memory') end
+    return s
+  end
+
+  ## if not Allocator.value.metafields.spandealloc then
+  -- Like `dealloc`, but operates over a span.
+  function Allocator:spandealloc(s: span_concept): void
+    if unlikely(s.size == 0) then return end
+    self:dealloc(s.data)
+  end
+  ## end
+
+  ## if not Allocator.value.metafields.spanrealloc then
+  --[[
+  Like `realloc`, but operate over a span.
+
+  If the operation fails and `size > 0`,
+  then the memory region is left untouched and span `s` is returned,
+  thus to check for an allocation failure you have to compare
+  if the returned span size is different than `size`.
+  ]]
+  function Allocator:spanrealloc(s: span_concept, size: usize): auto
+    local T: type = #[s.type.subtype]#
+    if unlikely(s.size == 0 and size > 0) then -- always use alloc on new allocation
+      s = self:spanalloc(@T, size)
+      return s
+    end
+    local p: *[0]T = (@*[0]T)(self:realloc(s.data, size * #T, s.size * #T))
+    if unlikely(size > 0 and p == nilptr) then
+      -- reallocation failed, return the original span
+      return s
+    end
+    s.data = p
+    s.size = size
+    return s
+  end
+  ## end
+
+  -- Like `spanrealloc`, but raises an error in case the allocation fails.
+  function Allocator:xspanrealloc(s: span_concept, size: usize): auto
+    s = self:spanrealloc(s, size)
+    if unlikely(s.size ~= size) then panic('out of memory') end
+    return s
+  end
+
+  ## if not Allocator.value.metafields.spanrealloc0 then
+  -- Like `spanrealloc`, but initializes added memory with zeros.
+  function Allocator:spanrealloc0(s: span_concept, size: usize): auto
+    local T: type = #[s.type.subtype]#
+    if unlikely(s.size == 0 and size > 0) then -- always use alloc on new allocation
+      s = self:spanalloc0(@T, size)
+      return s
+    end
+    local p: *[0]T = (@*[0]T)(self:realloc0(s.data, size * #T, s.size * #T))
+    if unlikely(size > 0 and p == nilptr) then
+      -- reallocation failed, return the original span
+      return s
+    end
+    s.data = p
+    s.size = size
+    return s
+  end
+  ## end
+
+  -- Like `spanrealloc0`, but raises an error in case the allocation fails.
+  function Allocator:xspanrealloc0(s: span_concept, size: usize): auto
+    s = self:spanrealloc0(s, size)
+    if unlikely(s.size ~= size) then panic('out of memory') end
+    return s
+  end
+
+  ## if not Allocator.value.metafields.new then
+  --[[
+  Allocates a new value.
+
+  - Argument `what` must be either a compile-time type or a runtime initialized value.
+  - If `what` is a runtime value, the return value will have the same type,
+  and it's contents are copied into the new allocated value.
+  - If `what` is a compile-time type, the returned value will be of `what` type,
+  and its contents are zero initialized.
+  - If the operation fails, then an error is raised.
+  - If `size` is present, then returns a span with `size` elements of `what`, instead of a pointer.
+  - In case the value has the `__new` metamethod, it will be called immediately after the allocation.
+  - In case the value has a finalizer, and the allocator supports finalizers,
+  such as `GCAllocator`, the value is marked to be finalized when deallocated.
+  - In case the value record size is 0, a valid pointer (different from nullptr) is guaranteed to be returned.
+  ]]
+  function Allocator:new(what: auto, size: facultative(usize), flags: facultative(usize)): auto
+    local T: type = #[what.type.is_type and what.value or what.type]#
+    ## local callnew = T.value.is_record and T.value.metafields.__new
+    ## if size.type.is_niltype then -- new pointer
+      ## Allocator_parse_type_flags(flags, T)
+      ## if T.value.size == 0 then
+      local ptr: *T = (@*T)(self:xalloc0(1, flags))
+      ## elseif what.type.is_type then
+      local ptr: *T = (@*T)(self:xalloc0(#T, flags))
+      ## else
+      local ptr: *T = (@*T)(self:xalloc(#T, flags))
+      memory.copy(ptr, &what, #T)
+      ## end
+      ## if callnew then
+      ptr:__new()
+      ## end
+      return ptr
+    ## else
+      ## if what.type.is_type then
+      local spn: span(T) = self:xspanalloc0(T, size, flags)
+      ## else
+      local spn: span(T) = self:xspanalloc(T, size, flags)
+      memory.spanset(spn, what)
+      ## end
+      ## if callnew then
+      for i:usize=0,<spn.size do
+        spn[i]:__new()
+      end
+      ## end
+      return spn
+    ## end
+  end
+  ## end
+
+  ## if not Allocator.value.metafields.delete then
+  --[[
+  Deletes value `v`, which must be either a pointer or a span.
+
+  It's similar to `dealloc` or `spandealloc`,
+  but `delete` should only be used when `new` is used for the same allocation.
+  If the deleted values has `__delete` metamethod, then it's called before deletion.
+  ]]
+  function Allocator:delete(v: deleteable_concept): void
+    ## local T = v.type.subtype
+    ## local calldelete = T.is_record and T.metafields.__delete
+    ## if v.type.is_span then
+      ## if calldelete then
+        for i:usize=0,<v.size do
+          v[i]:__delete()
+        end
+      ## end
+      self:spandealloc(v)
+    ## else -- pointer
+      ## if calldelete then
+        v:__delete()
+      ## end
+      self:dealloc(v)
+    ## end
+  end
+  ## end
+## end
