@@ -1,0 +1,261 @@
+--[[
+The vector library provides an efficient dynamic sized array of values.
+
+A vector has the following semantics:
+* Its elements starts at index 0 and go up to its length minus 1.
+* It should never be passed by value while being modified,
+otherwise the behavior is undefined, in case this is needed then try the `sequence` library.
+* Any failure when growing a vector raises an error.
+
+Remarks: A vector initialized from a list of unnamed fields is filled with the list elements.
+]]
+
+require 'memory'
+require 'span'
+
+## local function make_vectorT(T, Allocator)
+  ## static_assert(traits.is_type(T), "invalid type '%s'", T)
+  ## if not Allocator then
+  require 'allocators.default'
+  ## Allocator = DefaultAllocator
+  ## end
+
+  local Allocator: type = #[Allocator]#
+  local T: type = @#[T]#
+
+  -- Vector record defined when instantiating the generic `vector` with type `T`.
+  local vectorT: type <nickname(#[string.format('vector(%s)', T)]#)> = @record{
+    data: span(T),
+    size: usize,
+    allocator: Allocator
+  }
+
+  ##[[
+  local vectorT = vectorT.value
+  vectorT.is_contiguous = true
+  vectorT.is_container = true
+  vectorT.is_vector = true
+  vectorT.subtype = T
+  ]]
+
+  -- Concept matching fixed arrays of T.
+  local an_arrayT: type = #[concept(function(x)
+    -- if x.type:is_array_of(T) then
+    --   return types.PointerType(x.type)
+    -- end
+    if x.type:is_contiguous_of(T) then
+      return true
+    end
+    return false, string.format("no viable conversion from '%s' to '%s'", x.type, vectorT)
+  end, function(node)
+    if node.is_InitList and #node > 0 and not node:find_child_with_field('is_Pair') then
+      return node.tag == 'InitList' and types.ArrayType(T, #node)
+    end
+  end)]#
+
+  --[[
+  Creates a vector using a custom allocator instance.
+  Useful only when using instanced allocators.
+  ]]
+  function vectorT.make(allocator: Allocator): vectorT
+    local v: vectorT
+    v.allocator = allocator
+    return v
+  end
+
+  --[[
+  Removes all elements from the vector.
+  The internal storage buffer is not freed, and it may be reused.
+  ]]
+  function vectorT:clear(): void
+    self.size = 0
+  end
+
+  --[[
+  Free vector resources and resets it to a zeroed state.
+  Useful only when not using the garbage collector.
+  ]]
+  function vectorT:destroy(): void
+    self.allocator:spandealloc(self.data)
+    self.data = (@span(T))()
+    self.size = 0
+  end
+
+  -- Effectively the same as `destroy`, called when a to-be-closed variable goes out of scope.
+  function vectorT:__close(): void
+    self:destroy()
+  end
+
+  -- Reserve at least `n` elements in the vector storage.
+  function vectorT:reserve(n: usize): void
+    if likely(self.data.size >= n) then return end
+    self.data = self.allocator:xspanrealloc(self.data, n)
+  end
+
+  --[[
+  Resizes the vector so that it contains `n` elements.
+  When expanding new elements are initialized to zeros.
+  ]]
+  function vectorT:resize(n: usize): void
+    self:reserve(n)
+    if n > self.size then
+      memory.zero(&self.data[self.size], (n - self.size) * #T)
+    end
+    self.size = n
+  end
+
+  -- Returns a shallow copy of the vector, allocating a new vector.
+  function vectorT:copy(): vectorT
+    local clone: vectorT
+    if self.size > 0 then
+      clone.data = self.allocator:xspanalloc(@T, self.data.size)
+      memory.spancopy(clone.data, self.data)
+      clone.size = self.size
+    end
+    clone.allocator = self.allocator
+    return clone
+  end
+
+  -- Grow vector storage to accommodate at least one more element, used internally.
+  local function vectorT_grow(self: *vectorT): void <noinline>
+    local cap: usize = 1
+    if likely(self.data.size ~= 0) then
+      cap = self.data.size * 2
+      check(cap > self.data.size, 'capacity overflow')
+    end
+    self.data = self.allocator:xspanrealloc(self.data, cap)
+  end
+
+  -- Inserts a element `v` at the end of the vector.
+  function vectorT:push(v: T): void
+    local newsize: usize = self.size + 1
+    if unlikely(newsize > self.data.size) then
+      vectorT_grow(self)
+    end
+    self.data[self.size] = v
+    self.size = newsize
+  end
+
+  --[[
+  Removes the last element in the vector and returns its value.
+  The vector must not be empty.
+  ]]
+  function vectorT:pop(): T
+    check(self.size > 0, 'attempt to pop an empty vector')
+    self.size = self.size - 1
+    return self.data[self.size]
+  end
+
+  --[[
+  Inserts element `v` at position `pos` in the vector.
+  Elements with position greater or equal than `pos` are shifted up.
+  The position `pos` must be valid (within vector bounds).
+  ]]
+  function vectorT:insert(pos: usize, v: T): void
+    check(pos <= self.size, 'position out of bounds')
+    if unlikely(self.size + 1 >= self.data.size) then
+      vectorT_grow(self)
+    end
+    if self.size > pos then
+      memory.move(&self.data[pos + 1], &self.data[pos], (self.size - pos) * #T)
+    end
+    self.data[pos] = v
+    self.size = self.size + 1
+  end
+
+  --[[
+  Removes element at position `pos` in the vector and returns its value.
+  Elements with position greater than `pos` are shifted down.
+  The position `pos` must be valid (within vector bounds).
+  ]]
+  function vectorT:remove(pos: usize): T
+    check(pos < self.size, 'position out of bounds')
+    self.size = self.size - 1
+    local ret: T = self.data[pos]
+    if self.size > pos then
+      memory.move(&self.data[pos], &self.data[pos+1], (self.size - pos) * #T)
+    end
+    return ret
+  end
+
+  --[[
+  Removes the first item from the vector whose value is `v`.
+  The remaining elements are shifted.
+  Returns `true` if an element was removed, otherwise `false`.
+  ]]
+  function vectorT:removevalue(v: T): boolean
+    for i:usize=0,<self.size do
+      if self.data[i] == v then
+        self:remove(i)
+        return true
+      end
+    end
+    return false
+  end
+
+  --[[
+  Removes all elements from the vector where `pred` function returns `true`.
+  The remaining elements are shifted.
+  ]]
+  function vectorT:removeif(pred: function(v: T): boolean): void
+    local j: usize = 0
+    for i:usize=0,<self.size do
+      if not pred(self.data[i]) then
+        self.data[j] = self.data[i]
+        j = j + 1
+      end
+    end
+    self.size = j
+  end
+
+  -- Returns the number of elements the vector can store before triggering a reallocation.
+  function vectorT:capacity(): isize <inline>
+    return (@isize)(self.data.size)
+  end
+
+  --[[
+  Returns reference to element at position `pos`.
+  Position `pos` must be valid (within vector bounds).
+  The reference will remain valid until the vector grows.
+  Used when indexing elements with square brackets (`[]`).
+  ]]
+  function vectorT:__atindex(pos: usize): *T <inline,nosideeffect>
+    check(pos < self.size, 'position out of bounds')
+    return &self.data[pos]
+  end
+
+  --[[
+  Returns the number of elements in the vector.
+  Used by the length operator (`#`).
+  ]]
+  function vectorT:__len(): isize <inline>
+    return (@isize)(self.size)
+  end
+
+  --[[
+  Initializes vector elements from a fixed array.
+  Used to initialize vector elements with curly braces (`{}`).
+  ]]
+  function vectorT.__convert(values: an_arrayT): vectorT <inline>
+    local self: vectorT
+    self:reserve(#values)
+    self.size = #values
+    for i:usize=0,<#values do
+      self.data[i] = values[i]
+    end
+    return self
+  end
+
+  ## return vectorT
+## end
+
+--[[
+Generic used to instantiate a vector type in the form of `vector(T, Allocator)`.
+
+Argument `T` is the value type that the vector will store.
+Argument `Allocator` is an allocator type for the container storage,
+in case absent then `DefaultAllocator` is used.
+]]
+global vector: type = #[generalize(make_vectorT)]#
+
+return vector

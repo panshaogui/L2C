@@ -1,0 +1,163 @@
+--[[
+The iterators library provides iterators functions such as
+`ipairs`, `pairs` and `next` to assist iterating over elements of a container.
+
+The functions provided here can be used with the `for in` construction.
+
+Most containers in the standard library already requires this library.
+]]
+
+##[[
+local function container_type_by_reference(xtype)
+  local reftype, containertype
+  if xtype.is_pointer then
+    reftype = xtype
+    containertype = reftype.subtype
+  elseif xtype.is_span or xtype.is_sequence then
+    reftype = xtype
+    containertype = reftype
+  else
+    containertype = xtype
+    reftype = types.PointerType(containertype)
+  end
+  return reftype, containertype
+end
+]]
+
+-- Concept used to pass containers by reference.
+local container_reference_concept: type = #[concept(function(x)
+  local reftype = container_type_by_reference(x.type)
+  if not reftype then
+    return false, string.format("type '%s' is not a reference to a container", x.type)
+  end
+  return reftype
+end)]#
+
+-- Macro that implements the next iterator for lists.
+## local function impl_ipairs_next(atype)
+  k = k + 1
+  if k >= (#a + #[atype.is_oneindexing and 1 or 0]#) then
+    return false, 0, #[atype.subtype]#()
+  end
+  return true, k, a[k]
+## end
+
+-- Macro that implements the modifiable next iterator for lists.
+## local function impl_mipairs_next(atype)
+  k = k + 1
+  if k >= (#a + #[atype.is_oneindexing and 1 or 0]#) then
+    return false, 0, (@*#[atype.subtype]#)(nilptr)
+  end
+  return true, k, &a[k]
+## end
+
+--[[
+Returns values so that the construction
+```nelua
+for i,v in ipairs(a) do body end
+```
+will iterate over the index–value pairs of `a` from its first element up to the last.
+Where `i` is an integer determining the index of the element, and `v` its respective value.
+
+The container `a` must be contiguous, such as `array`, `span`, `vector` or `sequence`.
+]]
+global function ipairs(a: container_reference_concept): (auto, auto, integer) <inline>
+  ## local atype = a.type:implicit_deref_type()
+  ## if not atype.is_contiguous then static_error("container '%s' is not contiguous", atype) end
+  local function ipairs_next(a: #[a.type]#, k: integer): (boolean, integer, auto)
+    ## impl_ipairs_next(atype)
+  end
+  return ipairs_next, a, #[atype.is_oneindexing and 0 or -1]#
+end
+
+-- Like `ipairs` but yields reference to elements values so that you can modify them in-place.
+global function mipairs(a: container_reference_concept): (auto, auto, integer) <inline>
+  ## local atype = a.type:implicit_deref_type()
+  ## if not atype.is_contiguous then static_error("container '%s' is not contiguous", atype) end
+  local function mipairs_next(a: #[a.type]#, k: integer): (boolean, integer, auto)
+    ## impl_mipairs_next(atype)
+  end
+  return mipairs_next, a, #[atype.is_oneindexing and 0 or -1]#
+end
+
+--[[
+Gets the next element after key `k` for the container `a`.
+
+In case of success returns `true` plus the next element key and the next element value.
+Otherwise returns `false` plus a zeroed key and value.
+
+The container `a` must either have the metamethod `__next` or be a contiguous.
+]]
+global function next(a: container_reference_concept, k: auto): (auto, auto, auto)
+  ## local atype = a.type:implicit_deref_type()
+  ## if atype.is_record and atype.metafields.__next then
+    ## local ktype = atype.metafields.__next.type.argtypes[2]
+    ## if ktype.is_pointer and k.type.is_niltype then
+    local k: #[ktype]# = nilptr
+    ## end
+    return a:__next(k)
+  ## elseif atype.is_contiguous then
+    ## impl_ipairs_next(a.type:implicit_deref_type())
+  ## else static_error("type '%s' does not support `next`, is it missing `__next` metamethod?", atype) end
+end
+
+-- Like `next` but returns reference to the next element value, so that you can modify it in-place.
+global function mnext(a: container_reference_concept, k: auto): (auto, auto, auto)
+  ## local atype = a.type:implicit_deref_type()
+  ## if atype.is_record and atype.metafields.__mnext then
+    ## local ktype = atype.metafields.__mnext.type.argtypes[2]
+    ## if ktype.is_pointer and k.type.is_niltype then
+    local k: #[ktype]# = nilptr
+    ## end
+    return a:__mnext(k)
+  ## elseif atype.is_contiguous then
+    ## impl_mipairs_next(a.type:implicit_deref_type())
+  ## else static_error("type '%s' does not support `mnext`, is it missing `__mnext` metamethod?", atype) end
+end
+
+--[[
+Returns values so that the construction
+```nelua
+for k,v in pairs(a) do body end
+```
+will iterate over all the key–value pairs of `a`.
+Where `k` is a key determining the location of the element, and `v` its respective value.
+
+The container `a` must either have the metamethod `__pairs` or be a contiguous.
+Should work on any container, such as `array`, `span`, `vector`, `sequence` or `hashmap`.
+]]
+global function pairs(a: container_reference_concept): (auto, auto, auto) <inline>
+  ## local atype = a.type:implicit_deref_type()
+  ## if atype.is_record and atype.metafields.__pairs then
+    return a:__pairs()
+  ## elseif atype.is_contiguous then
+    return ipairs(a)
+  ## else static_error("type '%s' does not support `pairs`, is it missing `__pairs` metamethod?", atype) end
+end
+
+-- Like `pairs` but yields reference to elements values so that you can modify them in-place.
+global function mpairs(a: container_reference_concept): (auto, auto, auto) <inline>
+  ## local atype = a.type:implicit_deref_type()
+  ## if atype.is_record and atype.metafields.__mpairs then
+    return a:__mpairs()
+  ## elseif atype.is_contiguous then
+    return mipairs(a)
+  ## else static_error("type '%s' does not support `mpairs`, is it missing `__mpairs` metamethod?", atype) end
+end
+
+--[[
+If `index` is a number, returns all arguments after argument number index;
+a negative number indexes from the end (`-1` is the last argument).
+Otherwise, `index` must be the string '#',
+and select returns the total number of extra arguments it received.
+]]
+global function select(index: auto <comptime>, ...: varargs) <inline>
+  --TODO: move to builtins module
+  ## if index.type.is_string then
+    ## static_assert(index.value == '#', "bad argument #1 to 'select' (integer or '#' expected, got string)")
+    return #[select('#', ...)]#
+  ## elseif index.type.is_integral then
+    ## static_assert(math.abs(index.value) >= 1 and math.abs(index.value) <= select('#', ...), "bad argument #1 to 'select' (index out of range)")
+    return #[select(index.value, ...)]#
+  ## else static_error("bad argument #1 to 'select' (integer or '#' expected, got '%s')", what.type) end
+end

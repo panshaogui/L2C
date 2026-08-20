@@ -1,0 +1,86 @@
+--[[
+The traits library provides utilities to gather type information.
+]]
+
+##[[
+-- Counter that increment on every new defined type that are fundamentally different.
+local typeid_counter = 0
+
+-- Table of type's id by its codename.
+local typeid_by_codename = {}
+local function get_typeidof(vtype)
+  local id = typeid_by_codename[vtype.codename]
+  if not id then -- generate an id
+    id = typeid_counter
+    typeid_counter = typeid_counter + 1
+    typeid_by_codename[vtype.codename] = id
+  end
+  return id
+end
+]]
+-- Namespace for traits module.
+global traits: type = @record{}
+
+-- Type of the identifier for types.
+global traits.typeid: type = @uint32
+
+-- Record for type information.
+global traits.typeinfo: type = @record{
+  id: traits.typeid,
+  name: string,
+  nickname: string,
+  codename: string
+}
+
+--[[
+Returns the `typeid` of `v`.
+The given `v` can be either a runtime value or a compile-time type.
+]]
+function traits.typeidof(v: auto): traits.typeid <inline>
+  ## local vtype = v.type.is_type and v.value or v.type
+  return #[get_typeidof(vtype)]#
+end
+
+--[[
+Returns type information of `v`.
+The given `v` can be either a runtime value or a compile-time type.
+]]
+function traits.typeinfoof(v: auto): traits.typeinfo <inline>
+  ## local vtype = v.type.is_type and v.value or v.type
+  return (@traits.typeinfo){
+    id = #[get_typeidof(vtype)]#,
+    name = #[vtype.name]#,
+    nickname = #[vtype.nickname or '']#,
+    codename = #[vtype.codename]#
+  }
+end
+
+--[[
+Returns the type of `v`, coded as a string, as follows:
+* `"nil"` for `niltype`
+* `"pointer"` for pointers and `nilptr`
+* `"number"` for scalar types (including enums)
+* `"string"` for types that can represent a string
+* `"record"` for records
+* `"union"` for unions
+* `"type"` for compile-time types
+* `"function"` for functions
+* `"polyfunction"` for polymorphic functions
+
+This function behaves as describe to be compatible with Lua APIs.
+]]
+global function type(v: auto): string <inline>
+  ## if v.type.is_niltype then
+    return 'nil'
+  ## elseif v.type.is_nilptr then
+    return 'pointer'
+  ## elseif v.type.is_scalar then
+    return 'number'
+  ## elseif v.type.is_stringy then
+    return 'string'
+  ## else
+    return #[v.type.name]#
+  ## end
+end
+
+return traits

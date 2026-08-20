@@ -49,7 +49,7 @@ local function run_tests()
         os.execute("rm -f native_app")
 
         -- 调用我们的 l2c 编译
-        os.execute("lua l2c.lua " .. file .. " > l2c_test.log 2>&1")
+        os.execute("./l2c_bin " .. file .. " > l2c_test.log 2>&1")
         
         --  反例测试逻辑 (Expected Fail)
         if expect_fail_val then

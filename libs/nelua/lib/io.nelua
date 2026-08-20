@@ -1,0 +1,290 @@
+--[[
+The input and output library provides functions to manipulate files.
+
+The library provides two different styles for file manipulation.
+The first one uses implicit file handles,
+that is, there are operations to set a default input file and a default output file,
+and all input/output operations are done over these default files.
+The second style uses explicit file handles.
+When using implicit file handles, all operations are supplied by module `io`.
+
+When using explicit file handles,
+the operation `io.open` returns a file handle and
+then all operations are supplied as methods of the file handle.
+
+The io module also provides three predefined file handles with their usual meanings from C:
+
+* `io.stdin`: default input file handle
+* `io.stdout`: default output file handle
+* `io.stderr`: default error output file handle
+
+The I/O library never closes these files.
+
+Unless otherwise stated, all I/O functions return a valid value on success,
+otherwise an error message as a second result
+and a system-dependent error code as a third result.
+]]
+
+require 'filestream'
+
+-- Common C imports.
+
+local FILE: type <cimport,cinclude'<stdio.h>',forwarddecl> = @record{}
+
+-- Namespace for I/O module.
+global io: type = @record{}
+
+local FStream: type = #[filestream.value.fields.fs.type.subtype]#
+
+--[[
+The following is a trick to define `io.stdout`, `io.stderr` and `io.stdin` on first usage,
+so we can avoid generating C code for them when they are not used.
+]]
+##[[
+local infieldindex = false
+setmetatable(symbols.io.value.metafields, {__index = hygienize(function(metafields, key)
+  if infieldindex then return end
+  infieldindex = true
+]]
+  ## if key == 'stderr' then
+  local stderr: *FILE <cimport,cinclude'<stdio.h>'>
+  local stderrfs: FStream = {fp = stderr}
+
+  -- Default error output file handle.
+  global io.stderr: filestream = {fs = &stderrfs}
+  ## elseif key == 'stdout' then
+  local stdout: *FILE <cimport,cinclude'<stdio.h>'>
+  local stdoutfs: FStream = {fp = stdout}
+
+  -- Default output file handle.
+  global io.stdout: filestream = {fs = &stdoutfs}
+  ## elseif key == 'stdin' then
+  local stdin: *FILE <cimport,cinclude'<stdio.h>'>
+  local stdinfs: FStream = {fp = stdin}
+
+  -- Default input file handle.
+  global io.stdin: filestream = {fs = &stdinfs}
+  ## end
+##[[
+  infieldindex = false return rawget(metafields, key)
+end)})
+]]
+
+-- Returns last errno message plus its code.
+local function geterrno(): (string, integer)
+  local errno: cint <cimport,cinclude'<errno.h>'>
+  local function strerror(errnum: cint): cstring <cimport,cinclude'<string.h>'> end
+  return strerror(errno), errno
+end
+
+--[[
+Opens a file, in the mode specified in the string `mode`.
+In case of success, it returns an open file.
+
+Equivalent to `filestream:open(filename, mode)`.
+]]
+function io.open(filename: string, mode: facultative(string)) : (filestream, string, integer)
+  return filestream.open(filename, mode)
+end
+
+--[[
+Starts the program `prog` in a separated process and
+returns a file handle that you can use to read data from this program
+(if `mode` is "r", the default) or to write data to this program (if `mode` is "w").
+This function is system dependent and is not available on all platforms.
+]]
+function io.popen(prog: string, mode: facultative(string)) : (filestream, string, integer)
+  ## if mode.type.is_niltype then
+  local mode: string = "r"
+  ## else
+  assert(mode.size == 1 and (mode.data[0] == 'r'_b or mode.data[0] == 'w'_b) and mode.data[1] == 0, 'invalid mode')
+  ## end
+  ## if ccinfo.is_wasm then
+  return filestream{}, 'unsupported', -1
+  ## else
+  local modecs: cstring <nodce> = mode
+  local progcs: cstring <nodce> = prog
+  local fp: *FILE
+  local closef: function(fp: *FILE): cint
+  ## cinclude '@unistd.h'
+  ## cemit '#if defined(_WIN32)'
+  local function _popen(command: cstring, type: cstring): *FILE <cimport,cinclude'<stdio.h>'> end
+  local function _pclose(stream: *FILE): cint <cimport,cinclude'<stdio.h>'> end
+  fp = _popen(progcs, modecs)
+  closef = _pclose
+  ## cemit '#elif _POSIX_VERSION >= 200112L'
+  local function popen(command: cstring, type: cstring): *FILE <cimport,cinclude'<stdio.h>'> end
+  local function pclose(stream: *FILE): cint <cimport,cinclude'<stdio.h>'> end
+  local function fflush(fp: *FILE): cint <cimport,cinclude'<stdio.h>'> end
+  fflush(nilptr)
+  fp = popen(progcs, modecs)
+  closef = pclose
+  ## cemit '#endif'
+  if not fp and not closef then
+    return filestream{}, 'unsupported', -1
+  elseif not fp then
+    return filestream{}, geterrno()
+  end
+  return filestream._fromfp(fp, closef), '', 0
+  ## end
+end
+
+--[[
+Closes a file.
+Without a `file`, closes the default output file.
+
+Equivalent to `file:close()`.
+]]
+function io.close(file: facultative(filestream)): (boolean, string, integer)
+  ## if file.type.is_niltype then
+    return io.stdout:close()
+  ## else
+    return file:close()
+  ## end
+end
+
+--[[
+Save any written data to the default output file.
+
+Equivalent to `io.output():flush()`.
+]]
+function io.flush(): (boolean, string, integer) <polymorphic>
+  return io.stdout:flush()
+end
+
+--[[
+When called with a file name, it opens the named `file` (in text mode), and sets its handle as the default input file.
+When called with a file handle, it simply sets this file handle as the default input file.
+When called without arguments, it returns the current default input file.
+
+In case of errors this function raises the error, instead of returning an error code.
+]]
+function io.input(file: overload(string,filestream,niltype)): filestream
+  ## if file.type.is_string then
+    local fin: filestream, err: string = io.open(file, "r")
+    if not fin:isopen() then error(err) end
+    io.stdin = fin
+  ## elseif file.type.is_filestream then
+    assert(file:isopen(), 'attempt to use a closed file')
+    io.stdin = file
+  ## end
+  return io.stdin
+end
+
+-- Similar to `io.input`, but operates over the default output file.
+function io.output(file: overload(string,filestream,niltype)): filestream
+  ## if file.type.is_string then
+    local fout: filestream, err: string = io.open(file, "w")
+    if not fout:isopen() then error(err) end
+    io.stdout = fout
+  ## elseif file.type.is_filestream then
+    assert(file:isopen(), 'attempt to use a closed file')
+    io.stdout = file
+  ## end
+  return io.stdout
+end
+
+--[[
+In case of success, returns an open handle for a temporary file.
+This file is opened in update mode and it is automatically removed when the program ends.
+]]
+function io.tmpfile(): (filestream, string, integer)
+  local function fclose(fp: *FILE): cint <cimport,cinclude'<stdio.h>'> end
+  local function tmpfile(): *FILE <cimport,cinclude'<stdio.h>'> end
+  local fp: *FILE = tmpfile()
+  if not fp then
+    return filestream{}, geterrno()
+  end
+  return filestream._fromfp(fp, fclose), '', 0
+end
+
+--[[
+Read from default input, according to the given format.
+
+Equivalent to `io.input():read(fmt)`.
+]]
+function io.read(fmt: overload(integer,string,niltype)): (string, string, integer)
+  return io.stdin:read(fmt)
+end
+
+--[[
+Writes the value of each of its arguments to the standard output.
+The arguments must be strings or numbers.
+In case of success, this function returns `true`.
+
+Equivalent to `io.output():write(...)`.
+]]
+function io.write(...: varargs): (boolean, string, integer)
+  return io.stdout:write(...)
+end
+
+--[[
+Writes formatted values to the standard output, according to the given format.
+In case of success, this function returns `true`.
+
+Equivalent to `io.output():writef(fmt, ...)`.
+]]
+function io.writef(fmt: string, ...: varargs): (boolean, string, integer)
+  return io.stdout:writef(fmt, ...)
+end
+
+-- Like `io.writef` but also flushes the standard output.
+function io.printf(...: varargs): void
+  io.stdout:printf(...)
+end
+
+-- Like `print`, but writes to `io.stdout` using `io.write`.
+function io.print(...: varargs): void
+  io.stdout:print(...)
+end
+
+--[[
+Checks whether `obj` is a valid file handle.
+Returns the string `"file"` if `obj` is an open file handle,
+`"closed file"` if `obj` is a closed file handle,
+or `nil` if `obj` is not a file handle.
+]]
+function io.type(obj: auto): auto
+  ## if obj.type.is_filestream then
+    if obj:isopen() then
+      return "file"
+    else
+      return "closed file"
+    end
+  ## else
+    return nil
+  ## end
+end
+
+--[[
+Opens the given file name in read mode
+and returns an iterator function that works like `file:lines(...)` over the opened file.
+
+The call `io.lines()` (with no file name) is equivalent to `io.input():lines("l")`,
+that is, it iterates over the lines of the default input file.
+
+It currently never closes the file when the iteration finishes.
+In case of errors opening the file, this function raises the error, instead of returning an error code.
+]]
+function io.lines(filename: facultative(string), fmt: overload(integer,string,niltype))
+  ## if filename.type.is_niltype then
+    return io.stdin:lines()
+  ## else
+    local file: filestream = io.open(filename)
+    assert(file:isopen(), 'cannot open file')
+    ## if fmt.type.is_niltype then
+    local fmt: string = 'l'
+    ## end
+    local LinesState: type = @record{
+      file: filestream,
+      fmt: #[fmt.type]#
+    }
+    local function lines_next(state: LinesState, prevstr: string): (boolean, string)
+      local str: string, errmsg: string, status: integer = state.file:read(state.fmt)
+      return status == 0, str
+    end
+    return lines_next, (@LinesState){file=file,fmt=fmt}, (@string){}, file
+  ## end
+end
+
+return io

@@ -88,22 +88,26 @@ function M.execute(tmp_file, output_bin, deps)
         extra_objs = extra_objs .. " " .. obj
     end
 
-    -- 5. 终极一波流物理连结！
-    local compile_cmd = string.format(
-        "nelua --cc=clang --cflags='-O3 -march=native -flto%s' --ldflags='%s %s %s' -o %s %s", 
-        mac_cflags, mac_ldflags, final_ldflags, extra_objs, output_bin, tmp_file
-    )
-
-    local exit_code = os.execute(compile_cmd)
+    -- 5. 终极一波流物理连结！(转为全内存 VFS 引擎接收的 Array 格式)
+    print(" [L2C HOST 靶向] 启动 全内存 AST 转译与极限硬件优化...")
     
-    -- 打扫外包的 C++ 临时文件
-    os.execute("rm -f clib/*.o 2>/dev/null")
+    local args = {
+        "--cc=clang",
+        "--cflags=-O3 -march=native -flto" .. (mac_cflags or ""),
+        "--ldflags=" .. (mac_ldflags or "") .. " " .. (final_ldflags or "") .. " " .. (extra_objs or ""),
+        "-o", output_bin,
+        tmp_file
+    }
 
-    if exit_code == 0 or exit_code == true then
-        print(string.format(" [L2C] 编译完美收官！终极主权二进制已生成: ./%s", output_bin))
-        os.execute("ls -lh " .. output_bin .. " | awk '{print \" 物理体积: \" $5}'")
-    else
-        print(" [L2C] 底层 C 编译失败，请检查语法兼容性。")
+    -- 召唤 L2C 全内存编译器引擎，彻底绕过 Shell 进程开销！
+    if not _G.L2C_Nelua_Run(args) then
+        print(" [L2C 熔断] HOST 二进制编译失败！")
+        os.exit(1)
+    end
+    
+    -- 6. 打扫战场 (删除 C++ 胶水编译产生的 .o 文件)
+    if extra_objs ~= "" then
+        os.execute("rm -f " .. extra_objs)
     end
 end
 
