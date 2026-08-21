@@ -20,137 +20,14 @@ local function get_files(dir, ext)
     return t
 end
 
--- 准备所有的源文件
-local preload_files = {} -- 需要放入 package.preload 的 Lua 代码
-local vfs_files = {}     -- 需要放入 L2C_VFS 的资源文件
+-- 1. 启动 VFS 打包器子模块
+dofile("tools/pack_assets.lua")
 
-local function add_preload(mod_name, path)
-    local f = io.open(path, "r"); if not f then print(" 找不到 " .. path); os.exit(1) end
-    table.insert(preload_files, { mod = mod_name, code = f:read("*a"), path = path })
-    f:close()
-    print(" -> 已物理封印外部库/模块: " .. mod_name)
-end
-
--- 1. 物理封印本地 libs/ 目录下的依赖，彻底切断对宿主机全局环境的依赖！
-add_preload("tl", "libs/tl.lua")
-add_preload("inspect", "libs/inspect.lua")
-
--- 2. 封印 L2C 引擎与 Nelua 核心
-for _, dir in ipairs({"codegen", "l2c_cli"}) do
-    for _, p in ipairs(get_files(dir, "%.lua$")) do
-        local mod = p:gsub("^%./", ""):gsub("/", "."):gsub("%.lua$", "")
-        add_preload(mod, p)
-    end
-end
-for _, p in ipairs(get_files("libs/nelua/lualib", "%.lua$")) do
-    local mod = p:gsub("^libs/nelua/lualib/", ""):gsub("%.lua$", ""):gsub("/", ".")
-    add_preload(mod, p)
-end
--- L2C 核心入口
-add_preload("l2c", "l2c.lua")
-
--- 3. 封印 VFS 标准库
-for _, p in ipairs(get_files("std")) do
-    local f = io.open(p, "r"); table.insert(vfs_files, { path = p, code = f:read("*a") }); f:close()
-    print(" -> 已物理封印 VFS 库: " .. p)
-end
-for _, p in ipairs(get_files("libs/nelua/lib")) do
-    local vfs_path = p:gsub("^libs/nelua/", "")
-    local f = io.open(p, "r"); table.insert(vfs_files, { path = vfs_path, code = f:read("*a") }); f:close()
-end
-
--- ============================================================================
--- 生成 C 源码文件 l2c_main.c
--- ============================================================================
-print("\n  正在将所有源码编译为 C 字节数组 (luaL_loadbuffer 安全模式)...")
-local out = io.open("l2c_main.c", "w")
-
-out:write([[
-#include <stdio.h>
-#include <stdlib.h>
-#include <lua.h>
-#include <lualib.h>
-#include <lauxlib.h>
-
-int luaopen_lpeglabel(lua_State *L);
-int luaopen_lfs(lua_State *L);
-int luaopen_sys(lua_State *L);
-int luaopen_hasher(lua_State *L);
-
-static void l2c_preload_assets(lua_State *L) {
-    luaL_dostring(L, "_G.L2C_VFS = {}");
-]])
-
-local all_assets = {}
-for _, v in ipairs(preload_files) do table.insert(all_assets, v) end
-for _, v in ipairs(vfs_files) do table.insert(all_assets, v) end
-
--- 写入十六进制数组
-for i, asset in ipairs(all_assets) do
-    out:write(string.format("  static const unsigned char f_%d[] = {", i))
-    for j = 1, #asset.code do out:write(string.format("0x%02x,", string.byte(asset.code, j))) end
-    out:write("0x00};\n")
-    
-    if asset.mod then
-        out:write(string.format('  lua_getglobal(L, "package"); lua_getfield(L, -1, "preload");\n'))
-        out:write(string.format('  luaL_loadbuffer(L, (const char*)f_%d, %d, "@%s");\n', i, #asset.code, asset.path))
-        out:write(string.format('  lua_setfield(L, -2, "%s"); lua_pop(L, 2);\n', asset.mod))
-        
-        -- 双重复写兼容
-        local short_name = asset.mod:gsub("^codegen%.", ""):gsub("^l2c_cli%.", "")
-        if short_name ~= asset.mod then
-            out:write(string.format('  lua_getglobal(L, "package"); lua_getfield(L, -1, "preload");\n'))
-            out:write(string.format('  lua_getfield(L, -1, "%s"); lua_setfield(L, -2, "%s"); lua_pop(L, 2);\n', asset.mod, short_name))
-        end
-    else
-        out:write(string.format('  lua_getglobal(L, "L2C_VFS");\n'))
-        out:write(string.format('  lua_pushlstring(L, (const char*)f_%d, %d);\n', i, #asset.code))
-        out:write(string.format('  lua_setfield(L, -2, "%s"); lua_pop(L, 1);\n', asset.path))
-    end
-end
-
-out:write("}\n\n")
-
--- 写入主函数
-out:write([[
-int main(int argc, char** argv) {
-    lua_State *L = luaL_newstate();
-    luaL_openlibs(L);
-
-    luaL_requiref(L, "lpeglabel", luaopen_lpeglabel, 1); lua_pop(L, 1);
-    luaL_requiref(L, "lfs", luaopen_lfs, 1); lua_pop(L, 1);
-    luaL_requiref(L, "sys", luaopen_sys, 1); lua_pop(L, 1);
-    luaL_requiref(L, "hasher", luaopen_hasher, 1); lua_pop(L, 1);
-
-    lua_newtable(L);
-    for(int i = 0; i < argc; i++) {
-        lua_pushstring(L, argv[i]);
-        lua_rawseti(L, -2, i); 
-    }
-    lua_setglobal(L, "arg");
-
-    l2c_preload_assets(L);
-
-    if (luaL_dostring(L, "require('l2c')") != LUA_OK) {
-        fprintf(stderr, " L2C 内核崩溃: %s\n", lua_tostring(L, -1));
-        lua_close(L);
-        return 1;
-    }
-
-    lua_close(L);
-    return 0;
-}
-]])
-out:close()
-
--- ============================================================================
--- 阶段 3：执行 GCC/Clang 熔炼 (真正的 100% 源码级自举，0 系统依赖！)
--- ============================================================================
 print("\n  召唤 C 编译器进行终极封测...")
 
--- 1. 动态搜集所有 C 语言原材料 (包括完整的 Lua 虚拟机源码！)
+-- 2. 动态搜集所有 C 语言原材料 (包括完整的 Lua 虚拟机源码！)
 local c_sources = {
-    "l2c_main.c",
+    "clib/l2c_bootstrap.c",
     "clib/nelua_runtime/lfs.c",
     "clib/nelua_runtime/hasher.c",
     "clib/nelua_runtime/sys.c"
@@ -177,9 +54,15 @@ local out_bin = IS_WINDOWS and "l2c_bin.exe" or "l2c_bin"
 
 -- 终极纯净弹匣：完全独立于系统环境！只要有 gcc/clang 就能成功！
 local compile_cmds = {
+    -- 1. 绝对主权静态封印 (Alpine/Musl/Linux 的最爱，彻底斩断环境依赖！)
+    string.format("clang -O3 -flto %s %s %s -static -o %s 2>/dev/null", includes, all_c_src, libs, out_bin),
+    string.format("gcc -O3 -flto %s %s %s -static -o %s 2>/dev/null", includes, all_c_src, libs, out_bin),
+    
+    -- 2. 动态链接 (Mac Apple Silicon / Intel 的唯一出路，Ubuntu Glibc 备用)
     string.format("clang -O3 -flto %s %s %s -o %s 2>/dev/null", includes, all_c_src, libs, out_bin),
     string.format("gcc -O3 -flto %s %s %s -o %s 2>/dev/null", includes, all_c_src, libs, out_bin),
-    -- 去除 LTO 的安全降级版本
+    
+    -- 3. 去除 LTO 的安全降级版本 (针对编译链不完整的残缺环境)
     string.format("clang -O3 %s %s %s -o %s 2>/dev/null", includes, all_c_src, libs, out_bin),
     string.format("gcc -O3 %s %s %s -o %s 2>/dev/null", includes, all_c_src, libs, out_bin)
 }
@@ -197,7 +80,7 @@ for _, cmd in ipairs(compile_cmds) do
 end
 
 if res then
-    os.execute("rm l2c_main.c")
+    os.execute("rm -f clib/l2c_bundle.h")
     print("\n 盗梦空间完美闭环！独立的 L2C 原生二进制已生成: ./" .. out_bin)
 else
     print("\n [致命错误] 所有编译探针均失效！底层 C 编译器原始报错如下：")

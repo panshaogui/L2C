@@ -11,6 +11,7 @@
 int luaopen_lpeglabel(lua_State *L);
 int luaopen_lfs(lua_State *L);
 int luaopen_sys(lua_State *L);
+int luaopen_hasher(lua_State *L);
 
 // 挂载我们刚才生成的全内存 VFS 矩阵！
 #include "l2c_bundle.h"
@@ -24,6 +25,7 @@ int main(int argc, char **argv) {
     luaL_requiref(L, "lpeglabel", luaopen_lpeglabel, 1); lua_pop(L, 1);
     luaL_requiref(L, "lfs", luaopen_lfs, 1); lua_pop(L, 1);
     luaL_requiref(L, "sys", luaopen_sys, 1); lua_pop(L, 1);
+    luaL_requiref(L, "hasher", luaopen_hasher, 1); lua_pop(L, 1);
 
     // 3. 伪装系统参数表 arg
     lua_createtable(L, argc, 0);

@@ -1,0 +1,16 @@
+# ==============================================================================
+# L2C GitHub Linguist 雷达控制矩阵
+# ==============================================================================
+
+# 1. 屏蔽底层 C 语言虚拟机与扩展 (将它们标记为第三方依赖，不计入语言统计)
+clib/nelua_runtime/** linguist-vendored
+clib/l2c_bundle.h linguist-generated
+
+# 2. 屏蔽第三方 Lua 库 (Teal, Inspect, Nelua)
+libs/** linguist-vendored
+
+# 3. 屏蔽生成的中间态文件
+native_app* linguist-generated
+l2c_bin* linguist-generated
+*.pio.h linguist-generated
+l2c_hardware.* linguist-generated
