@@ -1,5 +1,5 @@
 # Compiled binaries
-native_app
+native_app*
 l2c_bin
 *_test
 *_engine
@@ -21,6 +21,7 @@ apply_license.sh
 !clib/nelua_runtime/lua/*.c
 !clib/nelua_runtime/lua/*.h
 nelua-lang/
+clib/l2c_bundle.h
 
 # ESP-IDF / Pico Build Folders
 build/
@@ -35,13 +36,12 @@ esp32_forge/managed_components/
 # OS generated files
 .DS_Store
 __MACOSX/
-native_app.dSYM/
 
 # Vscode
 .vscode/
 tlconfig.lua
 l2c/
-l2c_hardware.pio
-l2c_hardware.pio.h
-l2c_hardware.v
+*.pio
+*.pio.h
+*.v
 main
