@@ -10,13 +10,15 @@
 local type zmq_context_t = record end
 local type zmq_socket_t = record end
 
-local type C_ZMQ = record
+local type C_ZMQ_TYPE = record
     zmq_ctx_new: function(): zmq_context_t
     zmq_socket: function(ctx: zmq_context_t, type: integer): zmq_socket_t
     zmq_connect: function(sk: zmq_socket_t, endpoint: string): integer
     zmq_setsockopt: function(sk: zmq_socket_t, option: integer, optval: any, optvallen: integer): integer
     zmq_recv: function(sk: zmq_socket_t, buf: any, len: integer, flags: integer): integer
 end
+
+local C_ZMQ: C_ZMQ_TYPE
 
 -- ==============================================================================
 -- L2C 极简封装：ZMQ 高频网关 (0-GC Flat API)

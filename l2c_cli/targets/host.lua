@@ -109,6 +109,8 @@ function M.execute(tmp_file, output_bin, deps)
     if extra_objs ~= "" then
         os.execute("rm -f " .. extra_objs)
     end
+
+    print("\n 原生二进制已生成: ./" .. output_bin)
 end
 
 return M

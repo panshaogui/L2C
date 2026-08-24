@@ -8,7 +8,7 @@
 -- @l2c_include: nanomsg/nn.h
 -- @l2c_include: nanomsg/pubsub.h
 
-local type C_NN = record
+local type C_NN_TYPE = record
     nn_socket: function(integer, integer): integer
     nn_bind: function(integer, string): integer
     nn_connect: function(integer, string): integer
@@ -17,6 +17,8 @@ local type C_NN = record
     nn_recv: function(integer, any, integer, integer): integer
     nn_close: function(integer): integer
 end
+
+local C_NN: C_NN_TYPE
 
 -- 物理对齐的宏常量 (来自 nn.h)
 local NN_AF_SP: integer = 1

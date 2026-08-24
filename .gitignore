@@ -45,3 +45,4 @@ l2c/
 *.pio.h
 *.v
 main
+l2c_profile.txt

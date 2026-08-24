@@ -9,7 +9,7 @@
 
 local type uv_loop_t = record end
 
-local type C_UV = record
+local type C_UV_TYPE = record
     uv_default_loop: function(): uv_loop_t
     -- uv_timer_t 本质是结构体，我们用 any 接收指针
     uv_timer_init: function(uv_loop_t, any): integer
@@ -17,6 +17,8 @@ local type C_UV = record
     uv_timer_start: function(any, any, integer, integer): integer
     uv_run: function(uv_loop_t, integer): integer
 end
+
+local C_UV: C_UV_TYPE
 
 -- ==============================================================================
 -- L2C 极简封装：Libuv 异步事件引擎

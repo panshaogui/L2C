@@ -3,7 +3,7 @@
 -- L2C: Transpile Typed Lua into 0-GC Native C for HFT and Embedded Systems.
 -- ==============================================================================
 
-local tl = require("tl")
+local tl = require("libs.tl")
 local Codegen = require("codegen.core")
 local Forge = require("l2c_cli.hardware_forge")
 local M = {}

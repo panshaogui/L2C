@@ -292,7 +292,24 @@ function M:gen_local_function(node)
     end
     
     local args_str = table.concat(args_list, ", ")
-    local header = string.format("local function %s(%s)", name, args_str)
+
+    -- 核心修复：提取并翻译函数返回值类型 (支持多返回值)！
+    local ret_list = {}
+    if node.rets then
+        for _, ret_node in ipairs(node.rets) do
+            local r_name = ret_node.typename or "any"
+            if r_name == "nominal" and ret_node.names and ret_node.names[1] then r_name = ret_node.names[1] end
+            if r_name == "string" then r_name = "cstring" end
+            if r_name == "any" then r_name = "pointer" end
+            table.insert(ret_list, r_name)
+        end
+    end
+    local ret_str = ""
+    if #ret_list == 1 then ret_str = ": " .. ret_list[1]
+    elseif #ret_list > 1 then ret_str = ": (" .. table.concat(ret_list, ", ") .. ")" end
+
+    -- 拼接带返回值的函数头
+    local header = string.format("local function %s(%s)%s", name, args_str, ret_str)
     
     self.indent_level = self.indent_level + 1
     local body = self:gen(node.body)
@@ -336,7 +353,24 @@ function M:gen_global_function(node)
     end
     
     local args_str = table.concat(args_list, ", ")
-    local header = string.format("global function %s(%s)", name, args_str)
+    
+    -- 核心修复：提取并翻译函数返回值类型 (支持多返回值)！
+    local ret_list = {}
+    if node.rets then
+        for _, ret_node in ipairs(node.rets) do
+            local r_name = ret_node.typename or "any"
+            if r_name == "nominal" and ret_node.names and ret_node.names[1] then r_name = ret_node.names[1] end
+            if r_name == "string" then r_name = "cstring" end
+            if r_name == "any" then r_name = "pointer" end
+            table.insert(ret_list, r_name)
+        end
+    end
+    local ret_str = ""
+    if #ret_list == 1 then ret_str = ": " .. ret_list[1]
+    elseif #ret_list > 1 then ret_str = ": (" .. table.concat(ret_list, ", ") .. ")" end
+
+    -- 拼接带返回值的函数头
+    local header = string.format("global function %s(%s)%s", name, args_str, ret_str)
     
     self.indent_level = self.indent_level + 1
     local body = self:gen(node.body)
