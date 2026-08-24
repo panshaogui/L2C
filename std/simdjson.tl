@@ -11,11 +11,13 @@
 
 local type simd_ptr = record end
 
-local type C_SIMD = record
+local type C_SIMD_TYPE = record
     simdjson_c_parse: function(string, integer): simd_ptr
     simdjson_c_get_number: function(simd_ptr, string): number
     simdjson_c_free: function(simd_ptr)
 end
+
+local C_SIMD: C_SIMD_TYPE
 
 -- ==============================================================================
 -- L2C 极简封装：AVX-512 硬件加速 JSON 解析

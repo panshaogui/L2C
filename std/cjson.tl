@@ -11,7 +11,7 @@
 local type cJSON_ptr = record end
 
 -- 2. 挂载原生 C 函数 (严格对齐 C 标准头文件)
-local type C_CJSON = record
+local type C_CJSON_TYPE = record
     cJSON_Parse: function(any): cJSON_ptr
     cJSON_GetObjectItemCaseSensitive: function(cJSON_ptr, string): cJSON_ptr
     cJSON_IsNumber: function(cJSON_ptr): integer
@@ -20,6 +20,8 @@ local type C_CJSON = record
     cJSON_GetStringValue: function(cJSON_ptr): string
     cJSON_Delete: function(cJSON_ptr)
 end
+
+local C_CJSON: C_CJSON_TYPE
 
 -- ==============================================================================
 -- L2C 极简封装：CJSON 引擎
@@ -41,6 +43,14 @@ local function CJSON_GetNumber(obj: cJSON_ptr, key: string): number
         return C_CJSON.cJSON_GetNumberValue(item)
     end
     return 0.0
+end
+
+local function CJSON_GetString(obj: cJSON_ptr, key: string): string
+    local item = C_CJSON.cJSON_GetObjectItemCaseSensitive(obj, key)
+    if item ~= nil and C_CJSON.cJSON_IsString(item) ~= 0 then
+        return C_CJSON.cJSON_GetStringValue(item)
+    end
+    return nil
 end
 
 local function CJSON_Free(obj: cJSON_ptr)
