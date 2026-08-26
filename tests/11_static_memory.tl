@@ -3,7 +3,7 @@
 
 local type OrderBook = record
     bids_vol: integer
-    -- 🔥 L2C 铁律：声明零拷贝指针强转魔法
+    -- L2C 铁律：声明零拷贝指针强转魔法
     _cast: function(any): OrderBook
 end
 

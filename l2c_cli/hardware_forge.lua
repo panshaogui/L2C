@@ -8,6 +8,14 @@
 -- ==============================================================================
 local M = {}
 
+-- [核心修复：物理去缩进引擎]
+-- 抹除 Lua 多行字符串自带的前导空格，保证生成的 C 源码预处理宏绝对左对齐！
+local function align_left(str)
+    if type(str) ~= "string" or str == "" then return str end
+    -- 将所有以回车后紧跟的空格/Tab 替换为单个回车，并清理首尾空格
+    return (str:gsub("\n[ \t]+", "\n"):gsub("^[ \t]+", ""):gsub("[ \t]+$", ""))
+end
+
 function M.sniff_and_forge(bundled_code)
     local cfg = {
         arena_size = "10 * 1024 * 1024",
@@ -85,9 +93,14 @@ function M.sniff_and_forge(bundled_code)
             #ifndef L2C_SPINLOCK_DEFINED
             #define L2C_SPINLOCK_DEFINED
             #include <stdatomic.h>
-            static atomic_flag g_l2c_locks[8] = {0};
-            static inline void l2c_spinlock_lock(int id) { while (atomic_flag_test_and_set_explicit(&g_l2c_locks[id & 7], memory_order_acquire)) { asm volatile("nop"); } }
-            static inline void l2c_spinlock_unlock(int id) { __sync_synchronize(); atomic_flag_clear_explicit(&g_l2c_locks[id & 7], memory_order_release); }
+            // [核心修复：64 字节 Cache Line 物理隔离，彻底粉碎 False Sharing 性能风暴]
+            typedef union { atomic_flag lock; uint8_t _pad[64]; } l2c_aligned_lock_t;
+            static l2c_aligned_lock_t g_l2c_locks[8] = {
+                {ATOMIC_FLAG_INIT}, {ATOMIC_FLAG_INIT}, {ATOMIC_FLAG_INIT}, {ATOMIC_FLAG_INIT},
+                {ATOMIC_FLAG_INIT}, {ATOMIC_FLAG_INIT}, {ATOMIC_FLAG_INIT}, {ATOMIC_FLAG_INIT}
+            };
+            static inline void l2c_spinlock_lock(int id) { while (atomic_flag_test_and_set_explicit(&g_l2c_locks[id & 7].lock, memory_order_acquire)) { asm volatile("nop"); } }
+            static inline void l2c_spinlock_unlock(int id) { __sync_synchronize(); atomic_flag_clear_explicit(&g_l2c_locks[id & 7].lock, memory_order_release); }
             static inline void l2c_launch_core1(void* func_ptr) { xTaskCreatePinnedToCore((TaskFunction_t)func_ptr, "c1", 8192, NULL, 1, NULL, 1); }
             #define L2C_SPINLOCK_LOCK(id)   l2c_spinlock_lock(id)
             #define L2C_SPINLOCK_UNLOCK(id) l2c_spinlock_unlock(id)
@@ -112,9 +125,14 @@ function M.sniff_and_forge(bundled_code)
             #define L2C_SPINLOCK_DEFINED
             #include <stdatomic.h>
             #include <pthread.h>
-            static atomic_flag g_l2c_pc_locks[8] = {0};
+            // [核心修复：64 字节 Cache Line 物理隔离，保护 x86_64/ARM64 极速总线]
+             typedef union { atomic_flag lock; uint8_t _pad[64]; } l2c_aligned_lock_t;
+            static l2c_aligned_lock_t g_l2c_pc_locks[8] = {
+                {ATOMIC_FLAG_INIT}, {ATOMIC_FLAG_INIT}, {ATOMIC_FLAG_INIT}, {ATOMIC_FLAG_INIT},
+                {ATOMIC_FLAG_INIT}, {ATOMIC_FLAG_INIT}, {ATOMIC_FLAG_INIT}, {ATOMIC_FLAG_INIT}
+            };
             static inline void l2c_spinlock_lock(int id) {
-                while (atomic_flag_test_and_set_explicit(&g_l2c_pc_locks[id & 7], memory_order_acquire)) {
+                while (atomic_flag_test_and_set_explicit(&g_l2c_pc_locks[id & 7].lock, memory_order_acquire)) {
                     #if defined(__x86_64__) || defined(_M_X64)
                     __builtin_ia32_pause();
                     #elif defined(__aarch64__)
@@ -123,7 +141,7 @@ function M.sniff_and_forge(bundled_code)
                 }
             }
             static inline void l2c_spinlock_unlock(int id) { 
-                __sync_synchronize(); atomic_flag_clear_explicit(&g_l2c_pc_locks[id & 7], memory_order_release); 
+                __sync_synchronize(); atomic_flag_clear_explicit(&g_l2c_pc_locks[id & 7].lock, memory_order_release); 
             }
             static void* l2c_pthread_wrapper(void* arg) {
                 void (*func)(void) = (void (*)(void))arg;
@@ -152,8 +170,9 @@ function M.sniff_and_forge(bundled_code)
         #define L2C_SPSC_DEFINED
         #include <stdint.h>
         #include <stddef.h>
-        static inline ptrdiff_t l2c_spsc_read_arr(uintptr_t arr_ptr, int idx) { return ((ptrdiff_t*)(void*)arr_ptr)[idx]; }
-        static inline void l2c_spsc_write_arr(uintptr_t arr_ptr, int idx, ptrdiff_t val) { ((ptrdiff_t*)(void*)arr_ptr)[idx] = val; }
+        // [核心修复：注入 volatile 防御 -O3 循环不变量提升 (LICM) 死锁]
+        static inline ptrdiff_t l2c_spsc_read_arr(uintptr_t arr_ptr, int idx) { return ((volatile ptrdiff_t*)(void*)arr_ptr)[idx]; }
+        static inline void l2c_spsc_write_arr(uintptr_t arr_ptr, int idx, ptrdiff_t val) { ((volatile ptrdiff_t*)(void*)arr_ptr)[idx] = val; }
         static inline void l2c_memory_barrier(void) { __sync_synchronize(); }
         #endif
     ]]
@@ -173,7 +192,8 @@ end
 
 -- 组装函数：安全拼接，规避 % 解析炸弹
 function M.assemble_system(cfg, deps, nelua_code)
-    local header = string.format([==[
+    -- 使用 align_left 将模板自身彻底左对齐
+    local header_template = align_left([==[
         ## pragma { gc = 'none' }
         ##[[
         cemitdecl([=[
@@ -197,11 +217,19 @@ function M.assemble_system(cfg, deps, nelua_code)
         local function L2C_Get_Arena(): *L2C_ArenaType <inline>
         return &my_arenas[L2C_GET_CORE_ID()]
         end
-    ]==], cfg.core_id_macro, cfg.spinlock_c_decl, cfg.spsc_c_decl, 
-        (deps.cincludes or ""), cfg.nelua_bindings, 
-        cfg.arena_size, cfg.core_count)
+    ]==])
 
-    return header .. nelua_code
+    -- 注入前，将所有 C 宏和 Nelua 绑定全部通过物理去缩进引擎过滤，实现降维打击！
+    local header = string.format(header_template, 
+        align_left(cfg.core_id_macro), 
+        align_left(cfg.spinlock_c_decl), 
+        align_left(cfg.spsc_c_decl), 
+        align_left(deps.cincludes or ""), 
+        align_left(cfg.nelua_bindings), 
+        cfg.arena_size, cfg.core_count
+    )
+
+    return header .. "\n\n" .. nelua_code
 end
 
 return M

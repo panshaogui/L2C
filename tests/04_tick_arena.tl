@@ -3,7 +3,7 @@ local type Order = record
     price: integer
     qty: integer
     
-    -- 🔥 告诉 Teal：Order 身上确实有一个叫 _new 的类方法
+    -- 告诉 Teal：Order 身上确实有一个叫 _new 的类方法
     -- 它接收两个 integer，返回一个完整的 Order 对象
     _new: function(integer, integer): Order
 end

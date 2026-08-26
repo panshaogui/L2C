@@ -16,7 +16,8 @@ assert(ident.gen_identifier(mock_self, { tk = "Normal", typeid = 123 }) == "Norm
 -- 3. 测试参数强类型生成
 local arg_node = {
     tk = "msg",
-    argtype = { names = { "cstring" } }
+    -- [修复]：对齐真实 Teal AST 规范，补全 typename = "nominal"，满足 IR 引擎高精度识别要求
+    argtype = { typename = "nominal", names = { "cstring" } }
 }
 assert(ident.gen_argument(mock_self, arg_node) == "msg: cstring", "参数类型映射失败")
 

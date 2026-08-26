@@ -14,9 +14,9 @@ local mock_self = {
 local neq_node = { op = { op = "!=" }, e1 = { mock_val = "a" }, e2 = { mock_val = "b" } }
 assert(expr.gen_op(mock_self, neq_node) == "a ~= b", "不等于语法抹平失败")
 
--- 2. 测试数组索引 0-based 对齐 ([x - 1])
+-- 2. 测试数组索引 0-based 对齐 ([x - 1])，验证防越界物理隔离括号
 local idx_node = { op = { op = "@index" }, e1 = { mock_val = "arr" }, e2 = { mock_val = "i" } }
-assert(expr.gen_op(mock_self, idx_node) == "arr[i - 1]", "数组指针物理对齐失败")
+assert(expr.gen_op(mock_self, idx_node) == "arr[((i) - 1)]", "数组指针物理对齐失败")
 
 -- 4. 测试 L2C_Tick_Reset 熔断器拦截
 local reset_node = { op = { op = "@funcall" }, e1 = { kind = "variable", tk = "L2C_Tick_Reset" } }
