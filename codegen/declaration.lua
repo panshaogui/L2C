@@ -4,6 +4,40 @@
 -- ==============================================================================
 
 local M = {}
+local IR = require("codegen.ir")
+
+-- [核心架构升级] L2C-LIR 内部组装机：彻底告别散乱的字符串推导，组装严谨的物理内存模型
+local function build_type_ir(type_node)
+    if not type_node then return IR.Type.Pointer() end
+    local t_name = type_node.typename or "any"
+    
+    -- 1. 剥离 nominal 伪装
+    if t_name == "nominal" and type_node.names and type_node.names[1] then
+        return IR.Type.Primitive(type_node.names[1])
+    end
+    
+    -- 2. 物理数组降维 (递归组装 Span 树)
+    if t_name == "array" and type_node.elements then
+        local e_ir = build_type_ir(type_node.elements)
+        return IR.Type.Span(e_ir)
+    end
+    
+    -- 3. HFT 物理内存映射 (0-GC 强制转换)
+    if t_name == "string" then return IR.Type.Primitive("cstring") end
+    if t_name == "any" then return IR.Type.Pointer() end
+    if t_name == "function" then return IR.Type.Function() end
+    
+    -- 兜底返回基础类型
+    return IR.Type.Primitive(t_name)
+end
+
+-- 物理降维引擎垫片 (对老代码 100% 兼容无感)
+local function lower_type(type_node)
+    -- 第一步：拿到高度结构化的 IR 对象
+    local ir_node = build_type_ir(type_node)
+    -- 第二步：降维输出最终需要的底层代码
+    return ir_node:to_nelua()
+end
 
 -- 映射 1：Teal Record -> Nelua @record (带有类型感知的防御性注册表 + C FFI 探针)
 function M:gen_local_type(node)
@@ -49,16 +83,8 @@ function M:gen_local_type(node)
                 local args_out = {}
                 if func_info.args and func_info.args.tuple then
                     for i, arg in ipairs(func_info.args.tuple) do
-                        local t_name = arg.typename or "any"
-                        if t_name == "string" then t_name = "cstring" end
-                        
-                        -- [内存降维]：Teal 里的 any，在 C 语言 FFI 里就是纯正的 void*（Nelua 叫 pointer）
-                        if t_name == "any" then t_name = "pointer" end
-                        
-                        -- [核心修复]：如果是 nominal 自定义类型，拔出它藏在 names 数组里的真名！
-                        if t_name == "nominal" and arg.names and arg.names[1] then
-                            t_name = arg.names[1]
-                        end
+                        -- [统一降维引擎]
+                        local t_name = lower_type(arg)
                         
                         table.insert(args_out, string.format("arg%d: %s", i, t_name))
                     end
@@ -66,17 +92,8 @@ function M:gen_local_type(node)
                 
                 local ret_type = "void"
                 if func_info.rets and func_info.rets.tuple and func_info.rets.tuple[1] then
-                    local ret_node = func_info.rets.tuple[1]
-                    ret_type = ret_node.typename or "void"
-                    if ret_type == "string" then ret_type = "cstring" end
-                    
-                    -- [内存降维]：返回值如果是 any，同样映射为 void* (pointer)
-                    if ret_type == "any" then ret_type = "pointer" end
-                    
-                    -- [核心修复]：返回值同样剥离 nominal 伪装
-                    if ret_type == "nominal" and ret_node.names and ret_node.names[1] then
-                        ret_type = ret_node.names[1]
-                    end
+                    -- [统一降维引擎]
+                    ret_type = lower_type(func_info.rets.tuple[1])
                 end
                 
                 -- [核心架构统一]：生成绝对扁平的 C 函数映射！完美对接 expression.lua 中的裸调用！
@@ -91,13 +108,7 @@ function M:gen_local_type(node)
                 table.insert(out, c_decl)
             elseif func_info then
                 -- [HLS FFI 补丁]：支持 C 全局变量 / 结构体实例的降维绑定！
-                local v_type = func_info.typename or "any"
-                if v_type == "string" then v_type = "cstring" end
-                if v_type == "any" then v_type = "pointer" end
-                
-                if v_type == "nominal" and func_info.names and func_info.names[1] then
-                    v_type = func_info.names[1]
-                end
+                local v_type = lower_type(func_info)
                 
                 local c_decl = string.format(
                     "local %s: %s <cimport('%s'), nodecl>", 
@@ -121,15 +132,21 @@ function M:gen_local_type(node)
         self.enum_registry = self.enum_registry or {}
         local val_idx = 0
         
-        -- 直接从 X光 照出的 enumset 里拿键名！
+        -- [致命漏洞修复：强制对提取出的 key 进行字典序排序，保证 HFT ABI 的绝对确定性！]
         if def.enumset then
+            local keys = {}
             for enum_key, _ in pairs(def.enumset) do
                 if type(enum_key) == "string" then
-                    table.insert(out, self:indent() .. string.format("%s = %d,", enum_key, val_idx))
-                    -- 写入注册表，供 literal.lua 拦截
-                    self.enum_registry[enum_key] = name
-                    val_idx = val_idx + 1
+                    table.insert(keys, enum_key)
                 end
+            end
+            table.sort(keys)
+            
+            for _, enum_key in ipairs(keys) do
+                table.insert(out, self:indent() .. string.format("%s = %d,", enum_key, val_idx))
+                -- 写入注册表，供 literal.lua 拦截
+                self.enum_registry[enum_key] = name
+                val_idx = val_idx + 1
             end
         end
         
@@ -138,7 +155,7 @@ function M:gen_local_type(node)
         return table.concat(out, "\n")
     end
 
-    local def = node.value and node.value.newtype and node.value.newtype.def
+    -- [核心修复：移除此处强行覆盖的 def 变量，防止 AST 类型剥离失效]
     if not def or def.typename ~= "record" then return "" end
     self.record_registry = self.record_registry or {}
     
@@ -148,15 +165,8 @@ function M:gen_local_type(node)
         --  [精确对齐]：在这里同时拦截 _new 和所有类型为 "function" 的方法字段，彻底闭环
         local f_node = def.fields[field_name]
         if field_name ~= "_new" and f_node and f_node.typename ~= "function" then
-            -- 核心修复：取出类型名，并彻底剥离 nominal 伪装！
-            local t_name = f_node.typename or "any"
-            if t_name == "nominal" and f_node.names and f_node.names[1] then
-                t_name = f_node.names[1]
-            end
-            
-            -- 同步保持物理降维逻辑
-            if t_name == "string" then t_name = "cstring" end
-            if t_name == "any" then t_name = "pointer" end
+            -- [统一降维引擎]
+            local t_name = lower_type(f_node)
 
             table.insert(fields_info, { 
                 name = field_name, type = t_name 
@@ -264,27 +274,8 @@ function M:gen_local_function(node)
     if node.args and node.args[1] then
         for _, arg in ipairs(node.args) do
             if arg.kind == "argument" then
-                local t_name = arg.argtype and arg.argtype.typename or "any"
-                if t_name == "nominal" and arg.argtype.names then 
-                    t_name = arg.argtype.names[1] 
-                end
-                
-                --  [核心修复]：把 []type 升级为安全的 span(type)
-                if t_name == "array" and arg.argtype.elements then
-                    local e_name = arg.argtype.elements.typename or "any"
-                    if e_name == "nominal" and arg.argtype.elements.names then 
-                        e_name = arg.argtype.elements.names[1] 
-                    end
-                    t_name = "span(" .. e_name .. ")"
-                end
-
-                --  [物理降维]：业务函数如果传 any，在底层就是 C 语言的不透明指针 void* (pointer)！
-                if t_name == "any" then 
-                    t_name = "pointer"
-                elseif t_name == "function" then
-                    -- 完美对接 Nelua 的类型系统，保留函数特征！
-                    t_name = "function()"
-                end
+                -- [统一降维引擎] 彻底修复 string 穿透进 C 层的 GC 崩溃隐患
+                local t_name = lower_type(arg.argtype)
                 
                 table.insert(args_list, arg.tk .. ": " .. t_name)
             end
@@ -297,11 +288,7 @@ function M:gen_local_function(node)
     local ret_list = {}
     if node.rets then
         for _, ret_node in ipairs(node.rets) do
-            local r_name = ret_node.typename or "any"
-            if r_name == "nominal" and ret_node.names and ret_node.names[1] then r_name = ret_node.names[1] end
-            if r_name == "string" then r_name = "cstring" end
-            if r_name == "any" then r_name = "pointer" end
-            table.insert(ret_list, r_name)
+            table.insert(ret_list, lower_type(ret_node))
         end
     end
     local ret_str = ""
@@ -325,28 +312,8 @@ function M:gen_global_function(node)
     if node.args and node.args[1] then
         for _, arg in ipairs(node.args) do
             if arg.kind == "argument" then
-                local t_name = arg.argtype and arg.argtype.typename or "any"
-                if t_name == "nominal" and arg.argtype.names then 
-                    t_name = arg.argtype.names[1] 
-                end
-                
-                --  [降维打击：物理数组参数解包]
-                if t_name == "array" and arg.argtype.elements then
-                    local e_name = arg.argtype.elements.typename or "any"
-                    if e_name == "nominal" and arg.argtype.elements.names then 
-                        e_name = arg.argtype.elements.names[1] 
-                    end
-                    t_name = "span(" .. e_name .. ")"
-                end
-
-                --  [物理降维]：任何 any 参数都必须堕落为纯 C 指针
-                if t_name == "any" then 
-                    t_name = "pointer" 
-                elseif t_name == "function" then
-                    -- 完美对接 Nelua 的类型系统，保留函数特征！
-                    t_name = "function()"
-                end
-                
+                -- [统一降维引擎]
+                local t_name = lower_type(arg.argtype)
                 table.insert(args_list, arg.tk .. ": " .. t_name)
             end
         end
@@ -358,11 +325,7 @@ function M:gen_global_function(node)
     local ret_list = {}
     if node.rets then
         for _, ret_node in ipairs(node.rets) do
-            local r_name = ret_node.typename or "any"
-            if r_name == "nominal" and ret_node.names and ret_node.names[1] then r_name = ret_node.names[1] end
-            if r_name == "string" then r_name = "cstring" end
-            if r_name == "any" then r_name = "pointer" end
-            table.insert(ret_list, r_name)
+            table.insert(ret_list, lower_type(ret_node))
         end
     end
     local ret_str = ""
@@ -391,28 +354,8 @@ function M:gen_record_function(node)
                 local tk = arg.tk
                 -- [核心校准]：剥离 Teal 语法树中隐式注入的 self 参数
                 if tk ~= "self" then
-                    local t_name = arg.argtype and arg.argtype.typename or "any"
-                    if t_name == "nominal" and arg.argtype.names then 
-                        t_name = arg.argtype.names[1] 
-                    end
-                    
-                    -- [降维打击]：物理数组参数解包
-                    if t_name == "array" and arg.argtype.elements then
-                        local e_name = arg.argtype.elements.typename or "any"
-                        if e_name == "nominal" and arg.argtype.elements.names then 
-                            e_name = arg.argtype.elements.names[1] 
-                        end
-                        t_name = "span(" .. e_name .. ")"
-                    end
-
-                    -- [物理降维]：面向对象方法的 any 参数，必须堕落为纯 C 的 void* (pointer)！
-                    if t_name == "any" then 
-                        t_name = "pointer" 
-                    elseif t_name == "function" then
-                        -- 完美对接 Nelua 的类型系统，保留函数特征！
-                        t_name = "function()"
-                    end
-                    
+                    -- [统一降维引擎]
+                    local t_name = lower_type(arg.argtype) 
                     table.insert(args_list, tk .. ": " .. t_name)
                 end
             end

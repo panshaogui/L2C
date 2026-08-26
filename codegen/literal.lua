@@ -4,6 +4,23 @@
 -- ==============================================================================
 
 local M = {}
+local IR = require("codegen.ir")
+
+-- [L2C-LIR 引擎接入] 物理降维类型推导
+local function build_type_ir(type_node)
+    if not type_node then return IR.Type.Primitive("integer") end
+    local t_name = type_node.typename or "any"
+    if t_name == "nominal" and type_node.names and type_node.names[1] then
+        return IR.Type.Primitive(type_node.names[1])
+    end
+    if t_name == "array" and type_node.elements then
+        return IR.Type.Span(build_type_ir(type_node.elements))
+    end
+    if t_name == "string" then return IR.Type.Primitive("cstring") end
+    if t_name == "any" then return IR.Type.Pointer() end
+    if t_name == "function" then return IR.Type.Function() end
+    return IR.Type.Primitive(t_name)
+end
 
 -- ------------------------------------------
 --  映射 3：表赋值字面量生成器（无缝对接 C Stack Array）
@@ -20,10 +37,10 @@ function M:gen_literal_table(node)
                 table.insert(elements, self:gen(item.value))
             end
         end
-        local elem_type = "integer"
-        if node.expected.elements and node.expected.elements.typename then
-            elem_type = node.expected.elements.typename
-        end
+        -- [接入 LIR 引擎] 修复数组类型推导，确保 []string 被降维为 array of cstring
+        local elem_ir = build_type_ir(node.expected.elements)
+        local elem_type = elem_ir:to_nelua()
+
         --  [物理降维]：彻底封杀动态 Sequence！强制显式声明数组长度，
         -- 在 C 底层生成绝对安全的定长栈数组！例如 (@[256]number)
         return string.format("(@[%d]%s){%s}", #elements, elem_type, table.concat(elements, ", "))
@@ -56,8 +73,9 @@ end
 function M:gen_string(node)
     local val = tostring(node.value or node.tk or node[1])
     
-    -- 提取出不带引号的纯净字符串
-    local pure_val = val:match("([a-zA-Z_][a-zA-Z0-9_]*)")
+    -- [炸弹修复]：强制边界锚点，只有整个字符串完全是单个标识符时才触发枚举提取！
+    -- 绝对不会再误伤 print("Hello STATE_BUY") 这样的业务日志或报错信息。
+    local pure_val = val:match('^"([a-zA-Z_][a-zA-Z0-9_]*)"$') or val:match("^'([a-zA-Z_][a-zA-Z0-9_]*)'$")
     
     -- 如果在刚才写入的 enum_registry 找到了，立刻强转！
     if pure_val and self.enum_registry and self.enum_registry[pure_val] then

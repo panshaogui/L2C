@@ -103,17 +103,32 @@ end
 
 --  6. Repeat-Until 循环 (对应 C 语言的 do-while)
 function M:gen_repeat(node)
-    --  防御式属性探测：兼容 Teal 的 block 或 body 属性
+    self.indent_level = self.indent_level + 1
     local body_str = self:gen(node.block or node.body)
+    self.indent_level = self.indent_level - 1
+    
     local cond_str = self:gen(node.cond)
-    -- Nelua 完美原生支持 repeat ... until 语法，直接一比一物理平移
-    return string.format("repeat\n%s\nuntil %s", body_str, cond_str)
+    
+    local out = {}
+    table.insert(out, "repeat")
+    if body_str ~= "" then table.insert(out, body_str) end
+    table.insert(out, self:indent() .. "until " .. cond_str)
+    
+    return table.concat(out, "\n")
 end
 
 --  7. 纯作用域代码块 (Do-Block)
 function M:gen_do(node)
+    self.indent_level = self.indent_level + 1
     local body_str = self:gen(node.block or node.body)
-    return string.format("do\n%s\nend", body_str)
+    self.indent_level = self.indent_level - 1
+    
+    local out = {}
+    table.insert(out, "do")
+    if body_str ~= "" then table.insert(out, body_str) end
+    table.insert(out, self:indent() .. "end")
+    
+    return table.concat(out, "\n")
 end
 
 --  8. 底层极客跳转 (Goto)

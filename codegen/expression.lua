@@ -4,6 +4,31 @@
 -- ==============================================================================
 
 local M = {}
+local IR = require("codegen.ir")
+
+-- [L2C-LIR 桥接引擎]：将 Teal 传入的字符串类型标识符解析为强类型 IR，彻底免疫泛型漏水
+local function parse_type_to_ir(type_node)
+    local type_name = type_node.value or type_node.tk or "any"
+    
+    -- 智能脱壳：扒去 Teal 字符串的单/双引号
+    if type_name:match('^".*"$') or type_name:match("^'.*'$") then
+        type_name = type_name:sub(2, -2)
+    end
+    
+    -- IR 物理坍缩：0-GC 映射
+    if type_name == "string" then return IR.Type.Primitive("cstring") end
+    if type_name == "any" then return IR.Type.Pointer() end
+    if type_name == "function" then return IR.Type.Function() end
+    
+    -- IR 数组坍缩：将 "[]integer" 动态切片类型转为严谨的 Span IR
+    local arr_elem = type_name:match("^%[%](.+)$")
+    if arr_elem then
+        return IR.Type.Span(IR.Type.Primitive(arr_elem))
+    end
+    
+    -- 兜底
+    return IR.Type.Primitive(type_name)
+end
 
 function M:gen_op(node)
     local op_sym = node.op.op
@@ -26,13 +51,11 @@ function M:gen_op(node)
         --  [C FFI 内存宏]：原生强转 (Primitive Cast，专治 cstring 等基础类型)
         if func_node.kind == "variable" and func_node.tk == "L2C_Cast" then
             local ptr_exp = self:gen(node.e2[1])
-            local type_node = node.e2[2]
-            local type_name = type_node.value or type_node.tk or "any"
-            if type_name:match('^".*"$') or type_name:match("^'.*'$") then
-                type_name = type_name:sub(2, -2)
-            end
+            -- [接入 IR 引擎]
+            local type_ir = parse_type_to_ir(node.e2[2])
+            
             -- Nelua 原生直接强转语法：(@Type)(ptr)
-            return string.format("(@%s)(%s)", type_name, ptr_exp)
+            return string.format("(@%s)(%s)", type_ir:to_nelua(), ptr_exp)
         end
         
         -- [C FFI 内存宏]：C 语言回调函数指针强转！
@@ -74,14 +97,10 @@ function M:gen_op(node)
 
         -- 终极物理连片内存：在 Tick 竞技场开辟绝对连续的结构体数组！
         if func_node.kind == "variable" and func_node.tk == "L2C_RecordArray" then
-            local type_node = node.e2[1]
+            -- [接入 IR 引擎]
+            local type_ir = parse_type_to_ir(node.e2[1])
             local size_expr = self:gen(node.e2[2])
-            
-            -- 智能脱壳，拿到真实的结构体名字 (如 "Order" -> Order)
-            local type_name = type_node.value or type_node.tk or "any"
-            if type_name:match('^".*"$') or type_name:match("^'.*'$") then
-                type_name = type_name:sub(2, -2)
-            end
+            local type_name = type_ir:to_nelua()
             
             -- Nelua 语法降维：利用 Arena 瞬间划拨总字节数 (数量 * sizeof(类型))
             -- 并暴力强转为 C 语言的 0 长度指针数组！
@@ -90,18 +109,14 @@ function M:gen_op(node)
 
         -- [C FFI 内存宏]：静态持久化内存分配 (L2C_Static)
         if func_node.kind == "variable" and func_node.tk == "L2C_Static" then
-            local type_node = node.e2[1]
-            -- 兼容传入字符或者直接传入类型名
-            local type_name = type_node.value or type_node.tk or "any"
-            if type_name:match('^".*"$') or type_name:match("^'.*'$") then
-                type_name = type_name:sub(2, -2)
-            end
+            -- [接入 IR 引擎]
+            local type_ir = parse_type_to_ir(node.e2[1])
             
             -- 在 Nelua 中使用 <static> 注解，强制将其放在 C 语言的 .bss 数据段！
             return string.format([[(do
                 local o_static: %s <static>
                 in &o_static
-                end)]], type_name)
+                end)]], type_ir:to_nelua())
         end
 
         --  [C FFI 内存宏]：零拷贝强转（Zero-Copy Cast 优雅 OOP 版）
@@ -189,13 +204,11 @@ function M:gen_op(node)
     -- [L2C 深度语义熔断]：封杀 Lua 的字符串连接符，彻底断绝隐式内存分配
     if op_sym == ".." then
         self:panic("E004", node)
-    elseif op_sym == "==" then op_sym = "=="
-
     end
 
     if op_sym == "@index" then
-        --   1-based (Teal) 到 0-based (Nelua/C) 的平移，逻辑完美
-        return self:gen(node.e1) .. "[" .. self:gen(node.e2) .. " - 1]"
+        --   1-based (Teal) 到 0-based (Nelua/C) 的平移，增加物理隔离防御优先级坍塌
+        return self:gen(node.e1) .. "[((" .. self:gen(node.e2) .. ") - 1)]"
     else
         --   [位运算与一元操作护甲]：如果发现 e2 是空的，说明这是一个一元操作符 (如 ~a, -a, not a)
         if node.e2 == nil then
