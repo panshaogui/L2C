@@ -8,9 +8,9 @@ local Codegen = require("codegen.core")
 local Forge = require("l2c_cli.hardware_forge")
 local M = {}
 
-function M.build_nelua(bundled_code, deps, input_file)
+function M.build_nelua(bundled_code, deps, input_file, output_bin)
     local env = tl.init_env()
-    local result = tl.process_string(bundled_code, false, env, input_file)
+    local result = tl.process_string(bundled_code, false, env, input_file, output_bin)
     if #result.syntax_errors > 0 or #result.type_errors > 0 then
         print("\n========================================================")
         print(" [L2C 前端熔断] Teal 静态类型与语法护城河拦截！")
@@ -56,6 +56,10 @@ function M.build_nelua(bundled_code, deps, input_file)
     local engine = Codegen.new(bundled_code, deps.line_map)
     local nelua_code = engine:gen(result.ast)
 
+    -- 路径智能感知：提取 output_bin 所在的目录路径 (例如 "pico/main" -> "pico/")
+    local out_dir = output_bin:match("^(.*)/")
+    out_dir = out_dir and (out_dir .. "/") or ""
+
     -- [HLS PIO 物理闭环]：如果存在拦截的 PIO 硬件状态机，执行锻造与头文件注入
     if engine.pio_registry and next(engine.pio_registry) then
         local pio_out = {}
@@ -64,7 +68,7 @@ function M.build_nelua(bundled_code, deps, input_file)
             table.insert(pio_out, pio_asm)
             table.insert(pio_out, "\n")
         end
-        local pio_file = io.open("l2c_hardware.pio", "w")
+        local pio_file = io.open(out_dir .. "l2c_hardware.pio", "w")
         if pio_file then
             pio_file:write(table.concat(pio_out, "\n"))
             pio_file:close()
@@ -81,11 +85,11 @@ function M.build_nelua(bundled_code, deps, input_file)
             table.insert(v_out, v_code)
             table.insert(v_out, "\n")
         end
-        local v_file = io.open("l2c_hardware.v", "w")
+        local v_file = io.open(out_dir .. "l2c_hardware.v", "w")
         if v_file then
             v_file:write(table.concat(v_out, "\n"))
             v_file:close()
-            print(" [L2C HDL Forge] 纯硬连线 Verilog 数字电路综合完毕: l2c_hardware.v")
+            print(" [L2C HDL Forge] 纯硬连线 Verilog 数字电路综合完毕: " .. out_dir .. "l2c_hardware.v")
         end
     end
 

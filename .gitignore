@@ -24,9 +24,13 @@ nelua-lang/
 clib/l2c_bundle.h
 
 # ESP-IDF / Pico Build Folders
-build/
-esp32_forge/build/
-esp32_forge/managed_components/
+pico/build/
+pico/*.pio
+pico/*.pio.h
+pico/*.v
+
+esp32/build/
+esp32/managed_components/
 
 # Databases & Logs
 *.db

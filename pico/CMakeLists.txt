@@ -11,24 +11,14 @@ pico_sdk_init()
 # 2. 引入你的 L2C 编译器吐出来的 main.c
 add_executable(firmware main.c)
 
-# 3. 强行把 FreeRTOS 内核源码打包编进固件
-# set(FREERTOS_DIR $ENV{FREERTOS_KERNEL_PATH})
+# 3. 源码打包编进固件
 target_sources(firmware PRIVATE
     main.c
-    # ${FREERTOS_DIR}/tasks.c
-    # ${FREERTOS_DIR}/list.c
-    # ${FREERTOS_DIR}/queue.c
-    # ${FREERTOS_DIR}/timers.c
-    # ${FREERTOS_DIR}/portable/GCC/ARM_CM0/port.c
-    # ${FREERTOS_DIR}/portable/GCC/ARM_CM0/portasm.c
-    # ${FREERTOS_DIR}/portable/MemMang/heap_4.c
 )
 
-# 4. 指定头文件查找路径（包含 FreeRTOS 硬件层）
+# 4. 指定头文件查找路径
 target_include_directories(firmware PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
-    # ${FREERTOS_DIR}/include
-    # ${FREERTOS_DIR}/portable/GCC/ARM_CM0
 )
 
 # 5. 链接 Pico 基础硬件库（GPIO、串口等）

@@ -9,7 +9,7 @@ import json
 import os
 
 # 读取 ESP-IDF 生成的官方烧录参数
-with open('esp32_forge/build/flasher_args.json') as f:
+with open('esp32/build/flasher_args.json') as f:
     data = json.load(f)
 
 # 动态提取芯片型号 (如 ESP32, ESP32-S3)
@@ -36,14 +36,14 @@ manifest = {
 }
 
 # 写入文件
-with open('esp32_forge/build/manifest.json', 'w') as f:
+with open('esp32/build/manifest.json', 'w') as f:
     json.dump(manifest, f, indent=2)
 "
 
 echo " 动态清单 manifest.json 生成完毕！"
 
 # 生成赛博极客风的 Web 烧录界面
-cat << 'EOF' > esp32_forge/build/index.html
+cat << 'EOF' > esp32/build/index.html
 <!DOCTYPE html>
 <html>
 <head>
@@ -70,7 +70,7 @@ EOF
 
 echo "============================================================"
 echo " 烧录舱就绪！在您的终端执行以下命令开启本地 Web 服务器："
-echo " python3 -m http.server --directory esp32_forge/build"
+echo " python3 -m http.server --directory esp32/build"
 echo ""
 echo " 然后在宿主机使用 Chrome 浏览器打开: http://localhost:8000"
 echo "============================================================"
