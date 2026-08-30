@@ -37,7 +37,7 @@ print(string.format(" [L2C] 启动构建，目标终端: %s，入口: %s", targe
 
 -- 1. 组装与语法分析
 local bundled_code, deps = bundler.bundle(input_file)
-local tmp_file = builder.build_nelua(bundled_code, deps, input_file)
+local tmp_file = builder.build_nelua(bundled_code, deps, input_file, output_bin)
 
 -- 2. 靶向分发 (Target Dispatch)
 if target == "pico" then
