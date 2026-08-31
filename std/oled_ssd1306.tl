@@ -32,3 +32,9 @@ local function OLED_clear()
         C_OLED.l2c_oled_print(i, "")
     end
 end
+
+local function OLED_clear_3to6()
+    for i = 3, 6 do
+        C_OLED.l2c_oled_print(i, "")
+    end
+end

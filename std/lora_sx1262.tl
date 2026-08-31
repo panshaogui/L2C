@@ -207,10 +207,10 @@ local function SX1262_poll_rx()
         local irq_high = C_ESP_IDF.l2c_get_byte(L2C_Ref(rx_st), 2)
         local irq_low  = C_ESP_IDF.l2c_get_byte(L2C_Ref(rx_st), 3)
         
-        OLED_clear()
-        OLED_print(0, ">> RADAR TRIGGERED!")
-        OLED_print_num(2, "IRQ H: ", irq_high)
-        OLED_print_num(3, "IRQ L: ", irq_low)
+        OLED_clear_3to6()
+        OLED_print(3, ">> RADAR TRIGGERED!")
+        OLED_print_num(4, "IRQ H: ", irq_high)
+        OLED_print_num(5, "IRQ L: ", irq_low)
         print(" [L2C-RADAR] 拦截到电磁波！IRQ 状态 -> H: ", irq_high, " L: ", irq_low)
         
         -- 清除所有硬件中断标志位
@@ -233,9 +233,9 @@ local function SX1262_poll_rx()
         C_ESP_IDF.gpio_set_level(EORA_BOARD.CS, 1)
         
         -- 【核心修复：缩短肉眼观测时间到 10ms，立刻回去死盯总线！】
-        C_ESP_IDF.vTaskDelay(50) 
-        OLED_clear()
-        OLED_print(2, "Radar Sweep...")
+        C_ESP_IDF.vTaskDelay(60) 
+        OLED_clear_3to6()
+        OLED_print(6, "Radar Sweep...")
     end
 end
 
