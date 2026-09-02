@@ -5,6 +5,7 @@
 
 -- std/nvs.tl
 -- L2C 0-GC 非易失性存储引擎 (NVS)
+-- @l2c_source: clib/mcu/esp32_nvs.c
 
 -- L2C FFI 探针 (注意：Teal 里的 string 会被我们的 IR 引擎自动安全降维成 C 语言的 const char*)
 local type C_NVS = record

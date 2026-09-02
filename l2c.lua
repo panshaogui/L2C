@@ -41,9 +41,9 @@ local tmp_file = builder.build_nelua(bundled_code, deps, input_file, output_bin)
 
 -- 2. 靶向分发 (Target Dispatch)
 if target == "pico" then
-    require("l2c_cli.targets.pico").execute(tmp_file, output_bin)
+    require("l2c_cli.targets.pico").execute(tmp_file, output_bin, deps)
 elseif target == "esp32" then
-    require("l2c_cli.targets.esp32").execute(tmp_file, output_bin)
+    require("l2c_cli.targets.esp32").execute(tmp_file, output_bin, deps)
 else
     -- 默认 Host 模式：载入宿主机终极弹头，传递依赖包！
     require("l2c_cli.targets.host").execute(tmp_file, output_bin, deps)

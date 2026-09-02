@@ -8,6 +8,7 @@
 
 -- @l2c_import: std/eora_s3.tl
 -- @l2c_import: std/oled_ssd1306.tl
+-- @l2c_source: clib/mcu/esp32_sx1262.c
 
 -- 1. [L2C FFI 探针]：拦截 C 宇宙的底层函数！
 -- 我们利用刚刚完善的 LIR 引擎，将 any 自动降维为 void* 指针。
@@ -27,6 +28,10 @@ local type C_ESP_IDF = record
     l2c_get_byte: function(any, integer): integer
 
     l2c_sx1262_spi_write_buffer: function(any, integer)
+
+    -- [硬件中断与深渊挂起探针]
+    l2c_setup_dio1_interrupt: function(integer)
+    l2c_wait_for_radio: function()
 end
 
 -- 2. 硬件复位与唤醒引擎 (时序极其严苛)
@@ -232,18 +237,11 @@ local function SX1262_poll_rx()
         C_ESP_IDF.l2c_sx1262_spi_write_buffer(L2C_Ref(buf_rx), 4)
         C_ESP_IDF.gpio_set_level(EORA_BOARD.CS, 1)
         
-        -- 【核心修复：缩短肉眼观测时间到 10ms，立刻回去死盯总线！】
-        C_ESP_IDF.vTaskDelay(60) 
-        OLED_clear_3to6()
-        OLED_print(6, "Radar Sweep...")
     end
 end
 
 local function SX1262_init()
     print("[SX1262] 正在初始化 SPI 射频总线...")
-
-    --【新增：初始化 DIO1 为输入模式，用于接收硬件中断！】
-    C_ESP_IDF.gpio_set_direction(EORA_BOARD.DIO1, GPIO_MODE_INPUT)
 
     -- CS 片选引脚初始化为高电平
     C_ESP_IDF.gpio_set_direction(EORA_BOARD.CS, GPIO_MODE_OUTPUT)

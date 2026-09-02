@@ -25,12 +25,15 @@ SX1262_init()
 SX1262_setup_meshtastic_sniffer()
 SX1262_setup_rx()
 
-print(" [L2C] 已潜入 433MHz 频段，正在凝视 DIO1 中断线...")
+print(" [L2C] 正在挂载 DIO1 硬件上升沿中断...")
+C_ESP_IDF.l2c_setup_dio1_interrupt(EORA_BOARD.DIO1)
+
+print(" [L2C] 已潜入 433/470MHz 频段，系统进入深渊静默状态...")
 
 OLED_print(2, "RF Status: [ONLINE]")
 OLED_print(7, "Sniffing 433MHz...")
 
 while true do
+    C_ESP_IDF.l2c_wait_for_radio()
     SX1262_poll_rx()
-    C_ESP_IDF.vTaskDelay(1) 
 end

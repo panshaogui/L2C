@@ -15,11 +15,15 @@ apply_license.sh
 !clib/*.cpp
 !clib/*.h
 !clib/*.c
+!clib/mcu/*.h
+!clib/mcu/*.c
+
 !clib/nelua_runtime/*.c
 !clib/nelua_runtime/lpeglabel/*.c
 !clib/nelua_runtime/lpeglabel/*.h
 !clib/nelua_runtime/lua/*.c
 !clib/nelua_runtime/lua/*.h
+
 nelua-lang/
 clib/l2c_bundle.h
 
