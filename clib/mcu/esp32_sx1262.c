@@ -7,7 +7,14 @@
 // [L2C 射频引擎]：ESP-IDF 极速 SPI 底层驱动 (SX1262 专用)
 // =========================================================================
 
+#include <stddef.h>
+#include <stdint.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "driver/gpio.h"
+#include "esp_attr.h"
 #include "driver/spi_master.h"
+
 static spi_device_handle_t g_sx1262_spi_handle;
 
 static inline void l2c_sx1262_spi_init(int sck, int miso, int mosi) {
