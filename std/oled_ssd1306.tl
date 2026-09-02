@@ -5,6 +5,7 @@
 
 -- std/oled_ssd1306.tl
 -- L2C 0-GC 战术雷达副屏驱动 (SSD1306 I2C)
+-- @l2c_source: clib/mcu/esp32_ssd1306.c
 
 -- L2C FFI 探针
 local type C_OLED = record

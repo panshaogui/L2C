@@ -4,7 +4,7 @@
 -- ==============================================================================
 
 local M = {}
-function M.execute(tmp_file, output_bin)
+function M.execute(tmp_file, output_bin, deps)
     local out_c_file = output_bin .. ".c"
     
     -- 智能提取目录路径
@@ -22,6 +22,28 @@ function M.execute(tmp_file, output_bin)
         local c_src = fc:read("*a")
         fc:close()
         c_src = c_src:gsub("NELUA_STATIC_ASSERT%b();", "// L2C: Stripped Arch Asserts for MCU")
+
+        -- 终极物理注射：将 @l2c_source 的 C 源码直接追加到底部！
+        if deps and deps.cpp_sources then
+            for _, src_file in ipairs(deps.cpp_sources) do
+                local inject_code = _G.L2C_VFS and _G.L2C_VFS[src_file]
+                if not inject_code then
+                    local f_src = io.open(src_file, "r")
+                    if f_src then inject_code = f_src:read("*a"); f_src:close() end
+                end
+                
+                if inject_code then
+                    c_src = c_src .. "\n\n// =========================================================================\n"
+                    c_src = c_src .. "// L2C UNITY BUILD: Injected C Source -> " .. src_file .. "\n"
+                    c_src = c_src .. "// =========================================================================\n\n"
+                    c_src = inject_code .. "\n" .. c_src 
+                    print(" [L2C 物理注射] 已将 C 源码融进主固件: " .. src_file)
+                else
+                    print(" ⚠️ [L2C 警告] 找不到请求注入的 C 源码: " .. src_file)
+                end
+            end
+        end
+
         local fw = io.open(out_c_file, "w")
         fw:write(c_src) fw:close()
         print(" [L2C] 提取成功！固件源码: ./" .. out_c_file)
