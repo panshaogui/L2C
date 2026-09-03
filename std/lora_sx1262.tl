@@ -32,6 +32,9 @@ local type C_ESP_IDF = record
     -- [硬件中断与深渊挂起探针]
     l2c_setup_dio1_interrupt: function(integer)
     l2c_wait_for_radio: function()
+
+    l2c_launch_core1: function(any)
+    l2c_wake_main_core: function()
 end
 
 -- 2. 硬件复位与唤醒引擎 (时序极其严苛)

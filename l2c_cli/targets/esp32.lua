@@ -18,7 +18,7 @@ function M.execute(tmp_file, output_bin, deps)
         c_src = c_src:gsub("int main%(int argc, char%*%* argv%) %{", "void app_main(void) {\n  int argc = 0;\n  char** argv = (char**)0;\n")
         c_src = c_src:gsub("return%s+nelua_main%(argc,%s*argv%);", "nelua_main(argc, argv);")
         
-        -- 终极物理注射：将 @l2c_source 的 C 源码直接追加到底部！
+        -- 将 @l2c_source 的 C 源码直接追加到顶部！
         if deps and deps.cpp_sources then
             for _, src_file in ipairs(deps.cpp_sources) do
                 local inject_code = _G.L2C_VFS and _G.L2C_VFS[src_file]

@@ -10,6 +10,15 @@ rm -rf "$(pwd)/esp32/build"
 rm -f "$(pwd)/esp32/CMakeCache.txt"
 rm -f "$(pwd)/esp32/sdkconfig" # 极其关键：必须删掉旧的芯片配置文件！
 
+# 强制注入原生 USB 控制台路由配置
+echo " 2. 正在烧写 Native USB 路由表..."
+echo "CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y" > "$(pwd)/esp32/sdkconfig.defaults"
+echo "CONFIG_ESP_CONSOLE_SECONDARY_NONE=y" >> "$(pwd)/esp32/sdkconfig.defaults"
+
+# 强行激活 NimBLE 蓝牙 5.0 协议栈
+echo "CONFIG_BT_ENABLED=y" >> "$(pwd)/esp32/sdkconfig.defaults"
+echo "CONFIG_BT_NIMBLE_ENABLED=y" >> "$(pwd)/esp32/sdkconfig.defaults"
+
 # 2. 检查极速炼丹炉是否存在，如果不存在则使用本地 Dockerfile 真实构建！
 if ! docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
     echo " 2. 正在根据本地 Dockerfile.esp32 锻造含有 S3 架构的极速炼丹炉 (可能需要几分钟)..."
