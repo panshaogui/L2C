@@ -23,7 +23,7 @@ function M.execute(tmp_file, output_bin, deps)
         fc:close()
         c_src = c_src:gsub("NELUA_STATIC_ASSERT%b();", "// L2C: Stripped Arch Asserts for MCU")
 
-        -- 终极物理注射：将 @l2c_source 的 C 源码直接追加到底部！
+        -- 将 @l2c_source 的 C 源码直接追加到顶部！
         if deps and deps.cpp_sources then
             for _, src_file in ipairs(deps.cpp_sources) do
                 local inject_code = _G.L2C_VFS and _G.L2C_VFS[src_file]
