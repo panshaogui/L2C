@@ -8,6 +8,7 @@
 --@l2c_import: std/cmd_queue.tl
 --@l2c_import: std/stackstring.tl
 --@l2c_import: std/ble_nus.tl
+--@l2c_import: std/sdcard.tl
 
 ---------------------------------------------------------
 -- 副核任务 (Core 1)
@@ -48,6 +49,16 @@ OLED_print(2, "Initializing RF...")
 
 OLED_print_num(6, "Boot Count: ", boot_count)
 
+-- 点亮战术黑匣子
+if SDCard_init(EORA_BOARD.SD_MISO, EORA_BOARD.SD_MOSI, EORA_BOARD.SD_SCK, EORA_BOARD.SD_CS) then
+    OLED_print(5, "SD Card: [MOUNTED]")
+    print(" [SDCard] 挂载成功！准备写入日志...")
+    SDCard_append("radar.log", "=== L2C Node Booted ===")
+else
+    OLED_print(5, "SD Card: [FAILED]")
+    print(" [SDCard] 未检测到 TF 卡，日志功能降级关闭。")
+end
+
 SX1262_init()
 SX1262_setup_meshtastic_sniffer()
 SX1262_setup_rx()
@@ -55,18 +66,18 @@ SX1262_setup_rx()
 print(" [L2C] 正在挂载 DIO1 硬件上升沿中断...")
 C_ESP_IDF.l2c_setup_dio1_interrupt(EORA_BOARD.DIO1)
 
--- 点燃第二核心
-C_ESP_IDF.l2c_launch_core1(L2C_FuncPtr(Core1_UartTask))
-
-print(" [L2C] 已潜入 433/470MHz 频段，系统进入静默状态...")
-
-OLED_print(2, "RF Status: [ONLINE]")
-OLED_print(7, "Sniffing 433MHz...")
-
 -- 点亮蓝牙引擎
 BLE_init()
 print(" [BLE] 蓝牙广播已开启，设备名: L2C-Mesh")
 OLED_print(3, "BLE: [BROADCASTING]")
+
+-- 点燃第二核心
+C_ESP_IDF.l2c_launch_core1(L2C_FuncPtr(Core1_UartTask))
+
+OLED_print(2, "RF Status: [ONLINE]")
+OLED_print(7, "Sniffing 433MHz...")
+
+print(" [L2C] 已潜入 433/470MHz 频段，系统进入静默状态...")
 
 -- 为 UART 和 BLE 各准备一个解析缓冲，物理隔离防止乱码串台！
 local uart_buf = L2C_Buffer(64)
