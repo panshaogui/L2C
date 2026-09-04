@@ -9,6 +9,8 @@
 -- @l2c_import: std/eora_s3.tl
 -- @l2c_import: std/oled_ssd1306.tl
 -- @l2c_source: clib/mcu/esp32_sx1262.c
+--@l2c_import: std/stackstring.tl
+--@l2c_import: std/sdcard.tl
 
 -- 1. [L2C FFI 探针]：拦截 C 宇宙的底层函数！
 -- 我们利用刚刚完善的 LIR 引擎，将 any 自动降维为 void* 指针。
@@ -220,6 +222,19 @@ local function SX1262_poll_rx()
         OLED_print_num(4, "IRQ H: ", irq_high)
         OLED_print_num(5, "IRQ L: ", irq_low)
         print(" [L2C-RADAR] 拦截到电磁波！IRQ 状态 -> H: ", irq_high, " L: ", irq_low)
+        
+        -- 屏幕打印后，紧接着砸入物理磁盘！
+        -- 利用咱们的 StackString 0-GC 拼日志！
+        local log_buf = L2C_Buffer(64)
+        local log_str = L2C_Ref(log_buf)
+        StackStr_init(log_str)
+        StackStr_append_str(log_str, 64, "RADAR Hit! IRQ_H: ")
+        StackStr_append_int(log_str, 64, irq_high)
+        StackStr_append_str(log_str, 64, " IRQ_L: ")
+        StackStr_append_int(log_str, 64, irq_low)
+        
+        -- 一行代码，物理扇区写入完成！离开作用域 log_str 自动灰飞烟灭！
+        SDCard_append("radar.log", StackStr_get(log_str))
         
         -- 清除所有硬件中断标志位
         local buf_clr = L2C_Buffer(3)

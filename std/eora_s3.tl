@@ -15,6 +15,11 @@ local type EoRa_Pins = record
     RST: integer
     BUSY: integer
     DIO1: integer
+
+    SD_MISO: integer
+    SD_MOSI: integer
+    SD_SCK: integer
+    SD_CS: integer
 end
 
 -- 静态实例化：将 Ebyte EoRa-S3 的隐藏布线硬编码锁死！
@@ -25,7 +30,12 @@ local EORA_BOARD: EoRa_Pins = {
     CS = 7,
     RST = 8,
     BUSY = 34,
-    DIO1 = 33
+    DIO1 = 33,
+    
+    SD_MISO = 2,
+    SD_MOSI = 11,
+    SD_SCK = 14,
+    SD_CS = 13,
 }
 
 -- ESP-IDF GPIO 模式宏映射 (FFI 用)

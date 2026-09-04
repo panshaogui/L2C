@@ -44,6 +44,13 @@ static inline void l2c_str_append_cstr(void* ptr, int max_len, const char* str) 
     p[p[0] + 1] = '\0';
 }
 
+// 0-GC 极速整数转字符串追加，写日志必备
+static inline void l2c_str_append_int(void* ptr, int max_len, int val) {
+char num[16];
+snprintf(num, sizeof(num), "%d", val);
+l2c_str_append_cstr(ptr, max_len, num);
+}
+
 // 提取标准的 C 字符串指针 (可以直接传给 print, nvs_set_str, Oled 等)
 static inline const char* l2c_str_get(void* ptr) {
     return (const char*)((uint8_t*)ptr + 1);

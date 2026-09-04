@@ -18,6 +18,7 @@ local type C_STACKSTR = record
     l2c_str_len: function(any): integer
     l2c_str_eq: function(any, string): integer
     l2c_str_to_int: function(any): integer
+    l2c_str_append_int: function(any, integer, integer)
 end
 
 local function StackStr_init(ptr: any)
@@ -34,6 +35,10 @@ end
 
 local function StackStr_append_str(ptr: any, max_len: integer, str: string)
     C_STACKSTR.l2c_str_append_cstr(ptr, max_len, str)
+end
+
+local function StackStr_append_int(ptr: any, max_len: integer, val: integer)
+    C_STACKSTR.l2c_str_append_int(ptr, max_len, val)
 end
 
 local function StackStr_get(ptr: any): string
