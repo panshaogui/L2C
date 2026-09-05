@@ -6,6 +6,7 @@
 -- std/stackstring.tl
 -- L2C 0-GC 栈内存定长字符串库 (StackString)
 
+-- @l2c_include: clib/stackstring.h
 -- @l2c_source: clib/stackstring.c
 
 -- L2C FFI 探针 (类型绝对安全降维)

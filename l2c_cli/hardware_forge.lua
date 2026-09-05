@@ -8,6 +8,16 @@
 -- ==============================================================================
 local M = {}
 
+-- 【解耦引擎】：读取外部纯 C 头文件，准备进行物理拼接！
+local function load_clib(filename)
+    -- 注意路径，假设 l2c_bin 运行在项目根目录
+    local f = io.open("clib/" .. filename, "r")
+    if not f then return "/* WARNING: Failed to load " .. filename .. " */\n" end
+    local content = f:read("*a")
+    f:close()
+    return content
+end
+
 -- [核心修复：物理去缩进引擎]
 -- 抹除 Lua 多行字符串自带的前导空格，保证生成的 C 源码预处理宏绝对左对齐！
 local function align_left(str)
@@ -162,6 +172,10 @@ function M.sniff_and_forge(bundled_code)
             #define L2C_SPINLOCK_UNLOCK(id) l2c_spinlock_unlock(id)
             #endif
         ]]
+
+        -- 动态物理拼接外部 C 模块！
+        -- cfg.stackstring_c_decl = load_clib("stackstring.h")
+
     end
 
     --  2. 无锁切片器：接受 uintptr_t (L2C integer) 直接强转内存指针！
@@ -226,6 +240,7 @@ function M.assemble_system(cfg, deps, nelua_code)
         align_left(cfg.spsc_c_decl), 
         align_left(deps.cincludes or ""), 
         align_left(cfg.nelua_bindings), 
+        -- align_left(cfg.stackstring_c_decl or ""),
         cfg.arena_size, cfg.core_count
     )
 

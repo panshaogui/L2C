@@ -1,36 +1,14 @@
 -- examples/26_lora_ignition.tl
 
 --@l2c_import: std/esp32.tl
---@l2c_import: std/lora_sx1262.tl
+--@l2c_import: std/oled_ssd1306.tl
 --@l2c_import: std/nvs.tl
-
---@l2c_import: std/uart.tl
---@l2c_import: std/cmd_queue.tl
---@l2c_import: std/stackstring.tl
---@l2c_import: std/ble_nus.tl
 --@l2c_import: std/sdcard.tl
-
----------------------------------------------------------
--- 副核任务 (Core 1)
----------------------------------------------------------
-local function Core1_UartTask()
-    UART_init()
-    print(" [Core 1] 交互中枢已点火！正在深渊阻塞监听键盘...")
-    
-    while true do
-        local c = UART_read_char()
-        if c > 0 then
-            -- 【细节修复】：只有可见字符才回显！
-            if c >= 32 and c <= 126 then
-                print(" [UART]: ", c)
-            end
-            
-            CMD_Push(c)
-            -- 跨核闪电突击：踢醒主核！
-            C_ESP_IDF.l2c_wake_main_core()
-        end
-    end
-end
+--@l2c_import: std/lora_sx1262.tl
+--@l2c_import: std/uart.tl
+--@l2c_import: std/ble_nus.tl
+--@l2c_import: std/stackstring.tl
+--@l2c_import: std/cmd_queue.tl
 
 -- EoRa-S3 默认 OLED 引脚: SDA=18, SCL=17
 
@@ -71,6 +49,28 @@ BLE_init()
 print(" [BLE] 蓝牙广播已开启，设备名: L2C-Mesh")
 OLED_print(3, "BLE: [BROADCASTING]")
 
+---------------------------------------------------------
+-- 副核任务 (Core 1)
+---------------------------------------------------------
+local function Core1_UartTask()
+    UART_init()
+    print(" [Core 1] 交互中枢已点火！正在深渊阻塞监听键盘...")
+    
+    while true do
+        local c = UART_read_char()
+        if c > 0 then
+            -- 【细节修复】：只有可见字符才回显！
+            if c >= 32 and c <= 126 then
+                print(" [UART]: ", c)
+            end
+            
+            CMD_Push(c)
+            -- 跨核闪电突击：踢醒主核！
+            C_ESP_IDF.l2c_wake_main_core()
+        end
+    end
+end
+
 -- 点燃第二核心
 C_ESP_IDF.l2c_launch_core1(L2C_FuncPtr(Core1_UartTask))
 
@@ -89,7 +89,30 @@ StackStr_init(ble_str)
 
 while true do
     C_ESP_IDF.l2c_wait_for_radio()
-    SX1262_poll_rx()
+    -- 【业务层统筹：获取射频战果，调度 OLED 和 SD卡】
+    local hit, irq_high, irq_low = SX1262_poll_rx()
+    if hit then
+        -- 业务层决定怎么打印
+        OLED_clear_3to6()
+        OLED_print(3, ">> RADAR TRIGGERED!")
+        OLED_print_num(4, "IRQ H: ", irq_high)
+        OLED_print_num(5, "IRQ L: ", irq_low)
+        print(" [L2C-RADAR] 拦截到电磁波！IRQ 状态 -> H: ", irq_high, " L: ", irq_low)
+        
+        -- 业务层决定怎么存日志 (0-GC StackString 组装)
+        -- 屏幕打印后，紧接着砸入物理磁盘！
+        local log_buf = L2C_Buffer(64)
+        local log_str = L2C_Ref(log_buf)
+        StackStr_init(log_str)
+        StackStr_append_str(log_str, 64, "RADAR Hit! IRQ_H: ")
+        StackStr_append_int(log_str, 64, irq_high)
+        StackStr_append_str(log_str, 64, " IRQ_L: ")
+        StackStr_append_int(log_str, 64, irq_low)
+        
+        -- 一行代码，物理扇区写入完成！离开作用域 log_str 自动灰飞烟灭！
+        SDCard_append("radar.log", StackStr_get(log_str))
+    end
+
     -- 【链路 1】：处理 UART (串口键盘) 命令
     local has_data, c = CMD_Pop()
     while has_data do
