@@ -5,6 +5,7 @@
 
 -- std/sdcard.tl
 -- L2C 0-GC 战术黑匣子 (TF/MicroSD 驱动)
+-- @l2c_source: clib/mcu/esp32_sdcard.c
 
 local type C_SDCARD = record
     l2c_sdcard_init: function(integer, integer, integer, integer): integer

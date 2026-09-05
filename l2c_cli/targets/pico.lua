@@ -44,6 +44,10 @@ function M.execute(tmp_file, output_bin, deps)
             end
         end
 
+        -- 剥离本地 clib 头文件
+        -- ["<] 匹配左引号或左尖括号， [^">]+ 匹配文件名， [">] 匹配右引号或右尖括号
+        c_src = c_src:gsub('#include%s+["<]clib/[^">]+[">]', "// L2C: Stripped local clib header for MCU Unity Build")
+
         local fw = io.open(out_c_file, "w")
         fw:write(c_src) fw:close()
         print(" [L2C] 提取成功！固件源码: ./" .. out_c_file)

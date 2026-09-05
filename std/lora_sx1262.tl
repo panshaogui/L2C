@@ -6,11 +6,8 @@
 -- std/lora_sx1262.tl
 -- SX1262 0-GC 射频驱动核心 (ESP-IDF 极速 SPI 桥接)
 
--- @l2c_import: std/eora_s3.tl
--- @l2c_import: std/oled_ssd1306.tl
 -- @l2c_source: clib/mcu/esp32_sx1262.c
---@l2c_import: std/stackstring.tl
---@l2c_import: std/sdcard.tl
+-- @l2c_import: std/eora_s3.tl
 
 -- 1. [L2C FFI 探针]：拦截 C 宇宙的底层函数！
 -- 我们利用刚刚完善的 LIR 引擎，将 any 自动降维为 void* 指针。
@@ -198,7 +195,8 @@ local function SX1262_setup_rx()
 end
 
 -- 轮询 DIO1 中断并提取报文
-local function SX1262_poll_rx()
+-- 返回 boolean (是否触发), high, low，绝对不要在这里碰屏幕
+local function SX1262_poll_rx(): boolean, integer, integer
     if C_ESP_IDF.gpio_get_level(EORA_BOARD.DIO1) == 1 then
         
         -- 1. 获取引发中断的真实原因 (0x12 GetIrqStatus)
@@ -216,25 +214,6 @@ local function SX1262_poll_rx()
         -- 提取 16位 的 IRQ 状态码
         local irq_high = C_ESP_IDF.l2c_get_byte(L2C_Ref(rx_st), 2)
         local irq_low  = C_ESP_IDF.l2c_get_byte(L2C_Ref(rx_st), 3)
-        
-        OLED_clear_3to6()
-        OLED_print(3, ">> RADAR TRIGGERED!")
-        OLED_print_num(4, "IRQ H: ", irq_high)
-        OLED_print_num(5, "IRQ L: ", irq_low)
-        print(" [L2C-RADAR] 拦截到电磁波！IRQ 状态 -> H: ", irq_high, " L: ", irq_low)
-        
-        -- 屏幕打印后，紧接着砸入物理磁盘！
-        -- 利用咱们的 StackString 0-GC 拼日志！
-        local log_buf = L2C_Buffer(64)
-        local log_str = L2C_Ref(log_buf)
-        StackStr_init(log_str)
-        StackStr_append_str(log_str, 64, "RADAR Hit! IRQ_H: ")
-        StackStr_append_int(log_str, 64, irq_high)
-        StackStr_append_str(log_str, 64, " IRQ_L: ")
-        StackStr_append_int(log_str, 64, irq_low)
-        
-        -- 一行代码，物理扇区写入完成！离开作用域 log_str 自动灰飞烟灭！
-        SDCard_append("radar.log", StackStr_get(log_str))
         
         -- 清除所有硬件中断标志位
         local buf_clr = L2C_Buffer(3)
@@ -254,8 +233,12 @@ local function SX1262_poll_rx()
         C_ESP_IDF.gpio_set_level(EORA_BOARD.CS, 0)
         C_ESP_IDF.l2c_sx1262_spi_write_buffer(L2C_Ref(buf_rx), 4)
         C_ESP_IDF.gpio_set_level(EORA_BOARD.CS, 1)
-        
+
+        -- 向上层业务汇报战果！
+        return true, irq_high, irq_low
     end
+    
+    return false, 0, 0
 end
 
 local function SX1262_init()
