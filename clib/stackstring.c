@@ -65,3 +65,22 @@ int l2c_str_eq(void* ptr, const char* cmp) {
 int l2c_str_to_int(void* ptr) {
     return atoi((const char*)((uint8_t*)ptr + 1));
 }
+
+// [新增：0-GC 极速前缀匹配探针]
+static inline int l2c_str_startswith(void* ptr, const char* prefix) {
+    return strncmp((const char*)((uint8_t*)ptr + 1), prefix, strlen(prefix)) == 0 ? 1 : 0;
+}
+
+// [新增：0-GC 游标提取十进制整数 (例如截取 FREQ 后的数字)]
+static inline int l2c_str_parse_int(void* ptr, int offset) {
+    uint8_t len = ((uint8_t*)ptr)[0];
+    if (offset >= len) return 0;
+    return atoi((const char*)((uint8_t*)ptr + 1 + offset));
+}
+
+// [新增：0-GC 游标提取十六进制整数 (用于解析 SYNC 2B44)]
+static inline int l2c_str_parse_hex(void* ptr, int offset) {
+    uint8_t len = ((uint8_t*)ptr)[0];
+    if (offset >= len) return 0;
+    return (int)strtol((const char*)((uint8_t*)ptr + 1 + offset), NULL, 16);
+}
