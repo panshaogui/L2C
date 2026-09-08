@@ -20,6 +20,10 @@ local type C_STACKSTR = record
     l2c_str_eq: function(any, string): integer
     l2c_str_to_int: function(any): integer
     l2c_str_append_int: function(any, integer, integer)
+
+    l2c_str_startswith: function(any, string): integer
+    l2c_str_parse_int: function(any, integer): integer
+    l2c_str_parse_hex: function(any, integer): integer
 end
 
 local function StackStr_init(ptr: any)
@@ -56,4 +60,16 @@ end
 
 local function StackStr_to_int(ptr: any): integer
     return C_STACKSTR.l2c_str_to_int(ptr)
+end
+
+local function StackStr_startswith(ptr: any, prefix: string): boolean
+    return C_STACKSTR.l2c_str_startswith(ptr, prefix) == 1
+end
+
+local function StackStr_parse_int(ptr: any, offset: integer): integer
+    return C_STACKSTR.l2c_str_parse_int(ptr, offset)
+end
+
+local function StackStr_parse_hex(ptr: any, offset: integer): integer
+    return C_STACKSTR.l2c_str_parse_hex(ptr, offset)
 end
