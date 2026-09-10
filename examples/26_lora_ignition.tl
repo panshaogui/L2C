@@ -75,13 +75,15 @@ end
 C_ESP_IDF.l2c_launch_core1(L2C_FuncPtr(Core1_UartTask))
 
 OLED_print(2, "RF Status: [ONLINE]")
-OLED_print(7, "Sniffing 433MHz...")
+OLED_print(7, "FREQ: 470375") -- 默认初始信道
 
-print(" [L2C] 已潜入 433/470MHz 频段，系统进入静默状态...")
+print(" [L2C] 已潜入 CN_470 频段，系统进入静默状态...")
 
 ---------------------------------------------------------
 -- 0-GC 命令路由中心！
 ---------------------------------------------------------
+local g_is_scanning = false
+local g_scan_freq = 470000 -- 从 470.000 MHz 开始扫起！
 
 local function CMD_Process(cmd_str: any)
     local raw_cmd = StackStr_get(cmd_str)
@@ -116,9 +118,13 @@ local function CMD_Process(cmd_str: any)
         if ok and SX1262_restart_rx_safe(1) then
             print(">> [成功] 中心频率已真实重载为: ", khz, " kHz")
             OLED_print(6, "FREQ Set OK")
+            
+            -- [核心修复] 同步全局扫描变量，并刷新战术面板的最底层！
+            g_scan_freq = khz
+            OLED_print_num(7, "FREQ: ", khz)
         else
             print(">> [致命错误] SX1262 拒绝了 FREQ 指令！")
-            OLED_print(6, "FREQ Set FAIL!")
+            OLED_print(6, "FREQ FAIL!  ")
         end
 
     -- 2. [密码爆破]: SYNC 3444 (十六进制同步字)
@@ -174,11 +180,21 @@ local function CMD_Process(cmd_str: any)
             print(">> [错误] SF 值无效 (5~12)")
         end
 
-    -- 4. [主动开火]: TX Hello
+    -- 4. [主动开火]: TX Hello (全息伪装注入模式！)
     elseif StackStr_startswith(cmd_str, "TX ") then
-        local pay_len = StackStr_len(cmd_str) - 3
-        if pay_len > 0 then
-            print(">> 准备发射报文，长度: ", pay_len, " 字节")
+        if g_is_scanning then
+            g_is_scanning = false
+            print(">> [RADAR] 战术开火介入，强制挂起自动扫频！")
+            OLED_print(6, "SCAN: OFF   ")
+        end
+        
+        -- 核心：调动 C 引擎，将纯文本编译为加密装甲包！
+        local out_pkt_buf = L2C_Buffer(256)
+        local out_pkt_str = L2C_Ref(out_pkt_buf)
+        local final_len = C_ESP_IDF.l2c_mesh_encode_text_to_str(cmd_str, 3, out_pkt_str)
+        
+        if final_len > 0 then
+            print(">> [INJECT] 已生成全息伪装包，加密长度: ", final_len, " 字节")
             
             -- 1. 切换到 STDBY 模式
             if C_ESP_IDF.l2c_sx1262_wait_busy() then
@@ -188,13 +204,13 @@ local function CMD_Process(cmd_str: any)
             end
             C_ESP_IDF.vTaskDelay(1)
             
-            -- 2. 设置包参数 (0x8C, 0, 前导码16, 显式报头0, 负载长度 pay_len, CRC开1, IQ标准0)
+            -- 2. 设置包参数 (注意：负载长度必须是加密后的 final_len！)
             local buf_pkt = L2C_Buffer(7)
             C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_pkt), 0, 0x8C)
             C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_pkt), 1, 0x00)
             C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_pkt), 2, 0x10) 
             C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_pkt), 3, 0x00) 
-            C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_pkt), 4, pay_len) 
+            C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_pkt), 4, final_len) -- [核心动态适配]
             C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_pkt), 5, 0x01) 
             C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_pkt), 6, 0x00) 
             if C_ESP_IDF.l2c_sx1262_wait_busy() then
@@ -203,9 +219,9 @@ local function CMD_Process(cmd_str: any)
                 C_ESP_IDF.gpio_set_level(EORA_BOARD.CS, 1)
             end
 
-            -- 3. 重置收发基址到 0 (0x8F SetBufferBaseAddress)
+            -- 3. 重置收发基址到 0 (0x8F)
             local buf_base = L2C_Buffer(3)
-            C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_base), 0, 0x8F) -- [核心修复] 0x8F 才是设基址！
+            C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_base), 0, 0x8F)
             C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_base), 1, 0x00)
             C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_base), 2, 0x00)
             if C_ESP_IDF.l2c_sx1262_wait_busy() then
@@ -214,14 +230,13 @@ local function CMD_Process(cmd_str: any)
                 C_ESP_IDF.gpio_set_level(EORA_BOARD.CS, 1)
             end
 
-            -- [新增] 射频功放点火 (SetPaConfig + SetTxParams)
-            -- 开启 +14dBm 安全功率，防止 OCP 过流重启 
+            -- 开启 PA 功放并配平发射功率
             local buf_pa = L2C_Buffer(5)
-            C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_pa), 0, 0x95) -- 0x95 PaConfig
-            C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_pa), 1, 0x02) -- paDutyCycle
-            C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_pa), 2, 0x02) -- hpMax
-            C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_pa), 3, 0x00) -- deviceSel (SX1262)
-            C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_pa), 4, 0x01) -- paLdoEnable
+            C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_pa), 0, 0x95) 
+            C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_pa), 1, 0x02) 
+            C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_pa), 2, 0x02) 
+            C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_pa), 3, 0x00) 
+            C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_pa), 4, 0x01) 
             if C_ESP_IDF.l2c_sx1262_wait_busy() then
                 C_ESP_IDF.gpio_set_level(EORA_BOARD.CS, 0)
                 C_ESP_IDF.l2c_sx1262_spi_write_buffer(L2C_Ref(buf_pa), 5)
@@ -229,23 +244,22 @@ local function CMD_Process(cmd_str: any)
             end
             
             local buf_txp = L2C_Buffer(3)
-            C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_txp), 0, 0x8E) -- 0x8E TxParams
-            C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_txp), 1, 0x0E) -- TxPower: 14dBm (0x0E)
-            C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_txp), 2, 0x04) -- RampTime: 200us
+            C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_txp), 0, 0x8E) 
+            C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_txp), 1, 0x0E) -- 14dBm
+            C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_txp), 2, 0x04) 
             if C_ESP_IDF.l2c_sx1262_wait_busy() then
                 C_ESP_IDF.gpio_set_level(EORA_BOARD.CS, 0)
                 C_ESP_IDF.l2c_sx1262_spi_write_buffer(L2C_Ref(buf_txp), 3)
                 C_ESP_IDF.gpio_set_level(EORA_BOARD.CS, 1)
             end
 
-            -- 【核心修复 1：配置中断掩码，同时监听 TxDone(1) 和 RxDone(2) 等】
-            -- 0x7F 意味着只要芯片有任何动静，都拉高 DIO1！
+            -- 开启中断监听 (TxDone & RxDone)
             local buf_irq = L2C_Buffer(9)
             C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_irq), 0, 0x08)
             C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_irq), 1, 0x00)
-            C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_irq), 2, 0x7F) -- IRQ Mask
+            C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_irq), 2, 0x7F)
             C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_irq), 3, 0x00)
-            C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_irq), 4, 0x7F) -- DIO1 Mask
+            C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_irq), 4, 0x7F)
             C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_irq), 5, 0x00)
             C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_irq), 6, 0x00) 
             C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_irq), 7, 0x00)
@@ -256,14 +270,14 @@ local function CMD_Process(cmd_str: any)
                 C_ESP_IDF.gpio_set_level(EORA_BOARD.CS, 1)
             end
 
-            -- 4. 0-GC 极速 Payload 压入硬件 FIFO (偏移量为 3，跳过 "TX " 字符)
+            -- 4. 0-GC 将加密包裹压入射频 FIFO (偏移 0！)
             if C_ESP_IDF.l2c_sx1262_wait_busy() then
                 C_ESP_IDF.gpio_set_level(EORA_BOARD.CS, 0)
-                C_ESP_IDF.l2c_sx1262_write_payload_from_str(cmd_str, 3)
+                C_ESP_IDF.l2c_sx1262_write_payload_from_str(out_pkt_str, 0)
                 C_ESP_IDF.gpio_set_level(EORA_BOARD.CS, 1)
             end
 
-            -- 5. 触发发射! (0x83 SetTx)
+            -- 5. 触发发射! (0x83)
             local buf_tx = L2C_Buffer(4)
             C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_tx), 0, 0x83)
             C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_tx), 1, 0x00)
@@ -275,10 +289,19 @@ local function CMD_Process(cmd_str: any)
                 C_ESP_IDF.gpio_set_level(EORA_BOARD.CS, 1)
             end
             
-            print(">> 报文已压入发射端！等待 TxDone 硬件中断...")
+            print(">> 载荷已发射！预计空中飞行时间 300ms... 等待 TxDone")
             OLED_print(6, "TX FIRE!    ")
         end
-        
+    elseif StackStr_startswith(cmd_str, "SCAN") then
+        g_is_scanning = not g_is_scanning
+        if g_is_scanning then
+            print(">> [RADAR] 自动扫频模式 已开启！")
+            OLED_print(4, "SCAN: ON    ")
+        else
+            print(">> [RADAR] 自动扫频模式 已停止。")
+            OLED_print(4, "SCAN: OFF   ")
+        end
+        return 
     else
         print(">> [错误] 未知战术指令！")
         OLED_print(6, "Unknown CMD!")
@@ -298,44 +321,144 @@ local rx_payload_buf = L2C_Buffer(256)
 local rx_payload_str = L2C_Ref(rx_payload_buf)
 StackStr_init(rx_payload_str)
 
+local scan_hold_ticks = 0 -- [核心新增] 猎犬屏息倒计时器
+
 while true do
-    C_ESP_IDF.l2c_wait_for_radio()
+    local wake_reason = 1
     
-    -- 【业务层统筹：传入 Payload 缓冲区，获取射频战果】
+    -- 如果开启了扫描，则最多只等 150ms；否则死等
+    if g_is_scanning then
+        wake_reason = C_ESP_IDF.l2c_wait_for_radio_ms(150)
+    else
+        C_ESP_IDF.l2c_wait_for_radio()
+    end
+    
+    -- 【扫频逻辑引擎：带屏息防御】
+    if wake_reason == 0 and g_is_scanning then
+        if scan_hold_ticks > 0 then
+            -- 猎犬正在屏息！听到前导码了，死咬住频率不放！
+            scan_hold_ticks = scan_hold_ticks - 1
+        else
+            -- 正常切频 (每次步进 125kHz)
+            g_scan_freq = g_scan_freq + 25
+            if g_scan_freq > 483000 then g_scan_freq = 470000 end 
+            
+            local reg = C_ESP_IDF.l2c_sx1262_calc_freq(g_scan_freq)
+            local b0 = (reg >> 24) & 255; local b1 = (reg >> 16) & 255
+            local b2 = (reg >> 8) & 255;  local b3 = reg & 255
+            
+            if C_ESP_IDF.l2c_sx1262_wait_busy() then
+                C_ESP_IDF.gpio_set_level(EORA_BOARD.CS, 0)
+                C_ESP_IDF.l2c_sx1262_spi_xfer_2b(0x80, 0x00) 
+                C_ESP_IDF.gpio_set_level(EORA_BOARD.CS, 1)
+            end
+            C_ESP_IDF.vTaskDelay(1)
+            SX1262_send_cmd5(0x86, b0, b1, b2, b3)
+            SX1262_restart_rx_safe(1)
+            
+            OLED_print_num(6, "SWEEP: ", g_scan_freq)
+        end
+    end
+    
+    -- 【业务层统筹：获取射频战果】
     local hit, irq_high, irq_low = SX1262_poll_rx(rx_payload_str)
     if hit then
-        OLED_clear_3to6()
-        
-        -- 核心判断：是否是 RxDone (接收成功终端态，irq_low 的 Bit 1 为 1)
+        -- 核心判断：是否是 RxDone (接收成功终端态)
         if (irq_low & 2) == 2 then
+            scan_hold_ticks = 0 -- 收到完整数据，取消屏息
+            
+            -- 猎物彻底锁定！关闭扫描引擎！
+            if g_is_scanning then
+                g_is_scanning = false
+                OLED_print_num(6, "LOCKED: ", g_scan_freq)
+                print("========================================")
+                print(" [TARGET LOCKED] 雷达已锁定频道: ", g_scan_freq, " kHz!!!")
+                print("========================================")
+            end
+            
+            OLED_clear_3to6()
+            local len = StackStr_len(rx_payload_str)
             local rx_text = StackStr_get(rx_payload_str)
-            print(" [L2C-RX] 战术网传回明文: ", rx_text)
             
-            OLED_print(3, ">> MSG RECEIVED!")
-            OLED_print(5, rx_text)
-            
-            -- 将明文内容写入物理黑匣子
-            local log_buf = L2C_Buffer(256)
-            local log_str = L2C_Ref(log_buf)
-            StackStr_init(log_str)
-            StackStr_append_str(log_str, 256, "[RX MSG] ")
-            StackStr_append_str(log_str, 256, rx_text)
-            SDCard_append("radar.log", StackStr_get(log_str))
-        else
-            -- 其他射频事件 (TxDone, 报头错误, CRC失败等)
-            OLED_print(3, ">> RADAR EVENT")
-            OLED_print_num(4, "IRQ H: ", irq_high)
-            OLED_print_num(5, "IRQ L: ", irq_low)
+            if len >= 16 then
+                local m_to = C_ESP_IDF.l2c_mesh_get_to(rx_payload_str)
+                local m_from = C_ESP_IDF.l2c_mesh_get_from(rx_payload_str)
+                local m_id = C_ESP_IDF.l2c_mesh_get_id(rx_payload_str)
+                
+                print("\n================  战术情报截获  ================")
+                print(" 来源 (FROM) : ", m_from)
+                
+                -- 分配 0-GC 栈内存用于存放解密出的明文！
+                local text_buf = L2C_Buffer(256)
+                local text_str = L2C_Ref(text_buf)
+                StackStr_init(text_str)
+                
+                -- 呼叫 AES 破壁与 Protobuf 解码引擎！
+                local dec_st = C_ESP_IDF.l2c_mesh_decode_text(rx_payload_str, text_str)
+                
+                if dec_st == 1 then
+                    local msg = StackStr_get(text_str)
+                    print(" [TEXT 明文] >> ", msg)
+                    OLED_print(3, ">> TEXT DECODED!")
+                    OLED_print(4, msg)
+                    
+                    -- [修复] 将真正的明文情报写入黑匣子，绝对拒绝二进制污染！
+                    local log_buf = L2C_Buffer(256)
+                    local log_str = L2C_Ref(log_buf)
+                    StackStr_init(log_str)
+                    StackStr_append_str(log_str, 256, "[TEXT] FROM: ")
+                    StackStr_append_int(log_str, 256, m_from)
+                    StackStr_append_str(log_str, 256, " MSG: ")
+                    StackStr_append_str(log_str, 256, msg)
+                    SDCard_append("radar.log", StackStr_get(log_str))
+                    
+                elseif dec_st == 3 then
+                    print(" [POSITION] 拦截到目标的 GPS 坐标包！")
+                    OLED_print(3, ">> GPS POSITION")
+                    
+                    -- [扩充] 记录定位事件到黑匣子
+                    local log_buf = L2C_Buffer(128)
+                    local log_str = L2C_Ref(log_buf)
+                    StackStr_init(log_str)
+                    StackStr_append_str(log_str, 128, "[GPS] FROM: ")
+                    StackStr_append_int(log_str, 128, m_from)
+                    SDCard_append("radar.log", StackStr_get(log_str))
+                    
+                elseif dec_st == 4 then
+                    print(" [NODE INFO] 拦截到目标的设备信息！")
+                    OLED_print(3, ">> NODE INFO")
+                elseif dec_st == 67 then
+                    print(" [TELEMETRY] 拦截到目标的电池/遥测数据！")
+                    OLED_print(3, ">> TELEMETRY")
+                elseif dec_st > 0 then
+                    print(" [DATA] 成功解密隐藏数据包，PortNum: ", dec_st)
+                    OLED_print(3, ">> DATA PACKET")
+                else
+                    print(" [ERROR] (解密失败: 可能是私钥信道或干扰导致数据损坏)")
+                end
+                print("===================================================")
+            else
+                -- [双栖基站修复]：长度不足 16，说明是咱们 L2C 节点自己发的裸明文！直接提取！
+                local rx_text = StackStr_get(rx_payload_str)
+                print(" [L2C-RAW] 收到 L2C 战术网内部明文: ", rx_text)
+                
+                OLED_print(3, ">> RAW PACKET!")
+                OLED_print(4, rx_text)
+            end
+        elseif (irq_low & 4) == 4 or (irq_low & 16) == 16 then
+            -- [核心逻辑] 听到了前导码 (4) 或 报头 (16)
+            if g_is_scanning then
+                print(">> [RADAR] 猎犬察觉到微弱前导码！屏息锁定频率，等待完整电波降落...")
+                scan_hold_ticks = 6 
+            end
+            -- [修复] 绝对不要在这里操作 OLED 屏幕！用 print 快速刷过，火速回去死盯 SPI！
             print(" [L2C-RADAR] 雷达状态变更！IRQ 状态 -> H: ", irq_high, " L: ", irq_low)
             
-            local log_buf = L2C_Buffer(64)
-            local log_str = L2C_Ref(log_buf)
-            StackStr_init(log_str)
-            StackStr_append_str(log_str, 64, "Event! IRQ_H: ")
-            StackStr_append_int(log_str, 64, irq_high)
-            StackStr_append_str(log_str, 64, " IRQ_L: ")
-            StackStr_append_int(log_str, 64, irq_low)
-            SDCard_append("radar.log", StackStr_get(log_str))
+        elseif (irq_low & 64) == 64 or (irq_low & 32) == 32 then
+            -- 发现 CRC 错误或 Header 损坏 (大概率是撞到了环境噪音)
+            -- 立刻解除屏息，恢复残暴横扫！
+            scan_hold_ticks = 0
+            print(" [L2C-RADAR] 假信号 (CRC 损坏)，恢复横扫！")
         end
     end
 
@@ -344,7 +467,6 @@ while true do
     while has_data do
         if c == 10 or c == 13 then
             if StackStr_len(uart_str) > 0 then
-                -- 【直接呼叫路由中心！】
                 CMD_Process(uart_str)
                 StackStr_clear(uart_str)
             end
@@ -359,7 +481,6 @@ while true do
     while bc > 0 do
         if bc == 10 or bc == 13 then
             if StackStr_len(ble_str) > 0 then
-                -- 【直接呼叫路由中心！】
                 CMD_Process(ble_str)
                 StackStr_clear(ble_str)
             end

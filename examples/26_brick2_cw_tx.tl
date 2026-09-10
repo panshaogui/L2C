@@ -10,9 +10,11 @@ SX1262_init()
 
 -- 1. 切换至 Standby RC
 print("[SX1262] 1. 切换至 Standby RC 模式 (0x80)...")
-C_ESP_IDF.gpio_set_level(EORA_BOARD.CS, 0)
-C_ESP_IDF.l2c_sx1262_spi_xfer_2b(0x80, 0x00) 
-C_ESP_IDF.gpio_set_level(EORA_BOARD.CS, 1)
+if C_ESP_IDF.l2c_sx1262_wait_busy() then
+    C_ESP_IDF.gpio_set_level(EORA_BOARD.CS, 0)
+    C_ESP_IDF.l2c_sx1262_spi_xfer_2b(0x80, 0x00) 
+    C_ESP_IDF.gpio_set_level(EORA_BOARD.CS, 1)
+end
 C_ESP_IDF.vTaskDelay(1)
 
 -- 2. 设置数据包类型为 LoRa
@@ -31,9 +33,11 @@ local buf_txp = L2C_Buffer(3)
 C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_txp), 0, 0x8E)
 C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_txp), 1, 0x16)
 C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_txp), 2, 0x04)
-C_ESP_IDF.gpio_set_level(EORA_BOARD.CS, 0)
-C_ESP_IDF.l2c_sx1262_spi_write_buffer(L2C_Ref(buf_txp), 3)
-C_ESP_IDF.gpio_set_level(EORA_BOARD.CS, 1)
+if C_ESP_IDF.l2c_sx1262_wait_busy() then
+    C_ESP_IDF.gpio_set_level(EORA_BOARD.CS, 0)
+    C_ESP_IDF.l2c_sx1262_spi_write_buffer(L2C_Ref(buf_txp), 3)
+    C_ESP_IDF.gpio_set_level(EORA_BOARD.CS, 1)
+end
 
 -- 5. 【关键补充】配置调制参数 (SF9, BW250, CR4/5)
 print("[SX1262] 5. 配置调制参数 ModulationParams (0x8B)...")
@@ -49,9 +53,11 @@ C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_pkt), 3, 0x00)
 C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_pkt), 4, 0x05) -- Payload Len 5
 C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_pkt), 5, 0x01) 
 C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_pkt), 6, 0x00) 
-C_ESP_IDF.gpio_set_level(EORA_BOARD.CS, 0)
-C_ESP_IDF.l2c_sx1262_spi_write_buffer(L2C_Ref(buf_pkt), 7)
-C_ESP_IDF.gpio_set_level(EORA_BOARD.CS, 1)
+if C_ESP_IDF.l2c_sx1262_wait_busy() then
+    C_ESP_IDF.gpio_set_level(EORA_BOARD.CS, 0)
+    C_ESP_IDF.l2c_sx1262_spi_write_buffer(L2C_Ref(buf_pkt), 7)
+    C_ESP_IDF.gpio_set_level(EORA_BOARD.CS, 1)
+end
 
 -- 7. 启动发射
 print("[SX1262] 7. 正在执行 SetTx (0x83) 启动发射...")
@@ -60,15 +66,20 @@ C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_tx), 0, 0x83)
 C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_tx), 1, 0x00)
 C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_tx), 2, 0x00)
 C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_tx), 3, 0x00)
-C_ESP_IDF.gpio_set_level(EORA_BOARD.CS, 0)
-C_ESP_IDF.l2c_sx1262_spi_write_buffer(L2C_Ref(buf_tx), 4)
-C_ESP_IDF.gpio_set_level(EORA_BOARD.CS, 1)
+if C_ESP_IDF.l2c_sx1262_wait_busy() then
+    C_ESP_IDF.gpio_set_level(EORA_BOARD.CS, 0)
+    C_ESP_IDF.l2c_sx1262_spi_write_buffer(L2C_Ref(buf_tx), 4)
+    C_ESP_IDF.gpio_set_level(EORA_BOARD.CS, 1)
+end
 
 -- 8. 闭环断言：反查物理状态！
 C_ESP_IDF.vTaskDelay(2) -- 给芯片 20ms 启动 PA 功放
-C_ESP_IDF.gpio_set_level(EORA_BOARD.CS, 0)
-local rx_val = C_ESP_IDF.l2c_sx1262_spi_xfer_2b(0xC0, 0x00)
-C_ESP_IDF.gpio_set_level(EORA_BOARD.CS, 1)
+local rx_val = 0
+if C_ESP_IDF.l2c_sx1262_wait_busy() then
+    C_ESP_IDF.gpio_set_level(EORA_BOARD.CS, 0)
+    rx_val = C_ESP_IDF.l2c_sx1262_spi_xfer_2b(0xC0, 0x00)
+    C_ESP_IDF.gpio_set_level(EORA_BOARD.CS, 1)
+end
 
 local status_byte = rx_val // 256
 local chip_mode = (status_byte >> 4) & 7

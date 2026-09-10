@@ -18,6 +18,9 @@ apply_license.sh
 !clib/mcu/*.h
 !clib/mcu/*.c
 
+!clib/mesh_proto/meshtastic/*.h
+!clib/mesh_proto/meshtastic/*.c
+
 !clib/nelua_runtime/*.c
 !clib/nelua_runtime/lpeglabel/*.c
 !clib/nelua_runtime/lpeglabel/*.h

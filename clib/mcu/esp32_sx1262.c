@@ -211,9 +211,37 @@ static inline void l2c_wait_for_radio(void) {
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 }
 
+// [新增] 带有超时的深渊沉睡 (用于自动扫频雷达)
+// 返回 1 表示被中断踢醒，0 表示超时自然醒
+static inline int l2c_wait_for_radio_ms(int ms) {
+    return ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(ms)) > 0 ? 1 : 0;
+}
+
 // 允许副核 Core 1 强行踢醒主核 Core 0
 void l2c_wake_main_core(void) {
     if (g_l2c_main_task_handle != NULL) {
         xTaskNotifyGive(g_l2c_main_task_handle);
     }
+}
+
+// =========================================================================
+// [L2C Meshtastic 战术解码探针] 0-GC 直接穿透 StackString 内存
+// =========================================================================
+
+// 提取 Destination (目标地址 4 字节)
+int l2c_mesh_get_to(void* str_ptr) {
+    if (((uint8_t*)str_ptr)[0] < 16) return 0;
+    return *(int*)((uint8_t*)str_ptr + 1 + 0); 
+}
+
+// 提取 Source (来源地址 4 字节)
+int l2c_mesh_get_from(void* str_ptr) {
+    if (((uint8_t*)str_ptr)[0] < 16) return 0;
+    return *(int*)((uint8_t*)str_ptr + 1 + 4); 
+}
+
+// 提取 Packet ID (报文编号 4 字节)
+int l2c_mesh_get_id(void* str_ptr) {
+    if (((uint8_t*)str_ptr)[0] < 16) return 0;
+    return *(int*)((uint8_t*)str_ptr + 1 + 8); 
 }

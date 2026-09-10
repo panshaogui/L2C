@@ -7,9 +7,8 @@
 -- SX1262 0-GC 射频驱动核心 (ESP-IDF 极速 SPI 桥接)
 
 -- @l2c_source: clib/mcu/esp32_sx1262.c
+-- @l2c_source: clib/meshtastic_engine.c
 -- @l2c_import: std/eora_s3.tl
---@l2c_import: std/oled_ssd1306.tl
---@l2c_import: std/stackstring.tl
 
 -- 1. [L2C FFI 探针]：拦截 C 宇宙的底层函数！
 -- 我们利用刚刚完善的 LIR 引擎，将 any 自动降维为 void* 指针。
@@ -32,6 +31,7 @@ local type C_ESP_IDF = record
     -- [硬件中断与深渊挂起探针]
     l2c_setup_dio1_interrupt: function(integer)
     l2c_wait_for_radio: function()
+    l2c_wait_for_radio_ms: function(integer): integer -- [新增] 扫频超时探针
 
     l2c_launch_core1: function(any)
     l2c_wake_main_core: function()
@@ -43,6 +43,12 @@ local type C_ESP_IDF = record
     l2c_sx1262_set_busy_pin: function(integer)
     l2c_sx1262_wait_busy: function(): boolean  -- [新增] FFI: 物理防线探针
     l2c_sx1262_spi_transfer_safe: function(any, any, integer): integer
+
+    l2c_mesh_get_to: function(any): integer
+    l2c_mesh_get_from: function(any): integer
+    l2c_mesh_get_id: function(any): integer
+    l2c_mesh_decode_text: function(any, any): integer  -- [核心新增] 解码探针
+    l2c_mesh_encode_text_to_str: function(any, integer, any): integer
 end
 
 -- 2. 硬件复位与唤醒引擎 (时序极其严苛)
@@ -280,30 +286,37 @@ local function SX1262_setup_meshtastic_sniffer(): boolean
     end
 
     -- 3. 设置调制参数 (SetModulationParams - 0x8B)
-    -- 参数项: SF11 (0x0B), BW 250kHz (0x05), CR 4/5 (0x01), LowDataRateOptimize ON (0x01)
-    -- 注: SF11 在 250kHz 下必须开启 LowDataRateOptimize (第4位设为 0x01)，否则解调率极大下降！
-    print("[SX1262] 锁定基带: SF11, BW250, CR4/5, LDRO=ON...")
-    if not SX1262_send_cmd5(0x8B, 0x0B, 0x05, 0x01, 0x01) then
+    -- 参数: SF11(0x0B), BW250(0x05), CR4/5(0x01), LDRO=OFF(0x00)
+    print("[SX1262] 锁定基带: SF11, BW250, CR4/5, LDRO=OFF...")
+    if not SX1262_send_cmd5(0x8B, 0x0B, 0x05, 0x01, 0x00) then
         print("[SX1262-ERR] 调制参数配置被拒！")
         return false
     end
 
-    -- 4. 写入 Meshtastic 专属 LoRa SyncWord (0x2B44)
-    -- Meshtastic 官方网络使用了 0x2B44 (Private Network SyncWord)
-    -- Reg 0x0740 -> 0x2B, Reg 0x0741 -> 0x44
-    print("[SX1262] 注入 Meshtastic 专属 SyncWord (0x2B44)...")
-    SX1262_write_register(0x0740, 0x2B)
-    SX1262_write_register(0x0741, 0x44)
+    -- 4. 写入 Meshtastic 专属 LoRa SyncWord (0x24B4)
+    print("[SX1262] 注入 Meshtastic 专属 SyncWord (0x24B4)...")
+    SX1262_write_register(0x0740, 0x24)
+    SX1262_write_register(0x0741, 0xB4)
 
     -- 5. 设置数据包参数 (SetPacketParams - 0x8C)
-    -- 0x00, 0x10 : Preamble 长度 = 16 码片 (Meshtastic 默认 16)
-    -- 0x00       : HeaderType = Explicit (显式报头)
-    -- 0xFF       : Payload Length = 255 (最大变长接收)
-    -- 0x01       : CRCType = CRC ON
-    -- 0x00       : Standard IQ (非反转)
+    -- 【致命错误修复】：0x8C 严格要求只有 6 个参数字节！
+    -- 使用 L2C_Buffer(7) 绝对精准封口，防止多余 0x00 字节越界破坏状态机！
     print("[SX1262] 配置 PacketParams (Preamble=16, Explicit, MaxLen=255, CRC=ON)...")
-    if not SX1262_send_cmd9(0x8C, 0x00, 0x10, 0x00, 0xFF, 0x01, 0x00, 0x00, 0x00) then
-        print("[SX1262-ERR] 数据包结构参数设置失败！")
+    local buf_pkt = L2C_Buffer(7)
+    C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_pkt), 0, 0x8C)
+    C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_pkt), 1, 0x00) -- Preamble MSB
+    C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_pkt), 2, 0x10) -- Preamble LSB (16)
+    C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_pkt), 3, 0x00) -- Explicit Header
+    C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_pkt), 4, 0xFF) -- Max Payload
+    C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_pkt), 5, 0x01) -- CRC ON
+    C_ESP_IDF.l2c_set_byte(L2C_Ref(buf_pkt), 6, 0x00) -- Standard IQ
+    
+    if C_ESP_IDF.l2c_sx1262_wait_busy() then
+        C_ESP_IDF.gpio_set_level(EORA_BOARD.CS, 0)
+        C_ESP_IDF.l2c_sx1262_spi_write_buffer(L2C_Ref(buf_pkt), 7)
+        C_ESP_IDF.gpio_set_level(EORA_BOARD.CS, 1)
+    else
+        print("[SX1262-ERR] 数据包结构参数设置失败 (BUSY 锁死)！")
         return false
     end
 

@@ -15,7 +15,8 @@ if ! docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
 fi
 
 docker run --rm \
-    -v "$(pwd)/esp32":/project \
+    -v "$(pwd)":/project \
+    -w /project/esp32 \
     "$IMAGE_NAME" idf.py build
 
 echo " 编译完成！固件位于 esp32/build/ 目录下！"
