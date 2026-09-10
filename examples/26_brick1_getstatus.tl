@@ -20,10 +20,13 @@ local function test_brick_1_get_status(): boolean
     C_ESP_IDF.l2c_set_byte(L2C_Ref(tx_buf), 0, 0xC0)
     C_ESP_IDF.l2c_set_byte(L2C_Ref(tx_buf), 1, 0x00)
 
-    -- 3. 拉低 CS 执行传输
-    C_ESP_IDF.gpio_set_level(CS_PIN, 0)
-    local ret_st = C_ESP_IDF.l2c_sx1262_spi_transfer_safe(L2C_Ref(tx_buf), L2C_Ref(rx_buf), 2)
-    C_ESP_IDF.gpio_set_level(CS_PIN, 1)
+    -- 3. [防弹升级] 先探 BUSY，再拉低 CS 执行传输
+    local ret_st = -1
+    if C_ESP_IDF.l2c_sx1262_wait_busy() then
+        C_ESP_IDF.gpio_set_level(CS_PIN, 0)
+        ret_st = C_ESP_IDF.l2c_sx1262_spi_transfer_safe(L2C_Ref(tx_buf), L2C_Ref(rx_buf), 2)
+        C_ESP_IDF.gpio_set_level(CS_PIN, 1)
+    end
 
     -- 4. 打印并解析返回的原始数据
     if ret_st < 0 then

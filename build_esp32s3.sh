@@ -28,8 +28,8 @@ fi
 # 3. 跨维启动！强行切换 S3 靶标并点火编译！
 echo " 3. 正在启动炼丹炉并锁定目标为 esp32s3..."
 docker run --rm \
-    -v "$(pwd)/esp32":/project \
-    -w /project \
+    -v "$(pwd)":/project \
+    -w /project/esp32 \
     "$IMAGE_NAME" /bin/bash -c "idf.py set-target esp32s3 && idf.py build"
 
 echo " 4. 编译完成！S3 极速固件已生成于 esp32/build/ 目录下！"
