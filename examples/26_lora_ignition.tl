@@ -9,6 +9,9 @@
 --@l2c_import: std/ble_nus.tl
 --@l2c_import: std/stackstring.tl
 --@l2c_import: std/cmd_queue.tl
+--@l2c_import: std/wifi.tl
+--@l2c_import: std/ntp.tl
+--@l2c_import: std/udp.tl
 
 -- EoRa-S3 默认 OLED 引脚: SDA=18, SCL=17
 
@@ -17,15 +20,9 @@ OLED_clear()
 
 NVS_init()
 
-local boot_count = NVS_get_int("boot_cnt", 0)
-boot_count = boot_count + 1
-NVS_set_int("boot_cnt", boot_count)
-
 OLED_print(0, "L2C-Mesh Node v1.0")
 OLED_print(1, "===================")
 OLED_print(2, "Initializing RF...")
-
-OLED_print_num(6, "Boot Count: ", boot_count)
 
 -- 点亮战术黑匣子
 if SDCard_init(EORA_BOARD.SD_MISO, EORA_BOARD.SD_MOSI, EORA_BOARD.SD_SCK, EORA_BOARD.SD_CS) then
@@ -301,7 +298,48 @@ local function CMD_Process(cmd_str: any)
             print(">> [RADAR] 自动扫频模式 已停止。")
             OLED_print(4, "SCAN: OFF   ")
         end
-        return 
+        return
+    -- 5. [网关配置]: WIFI 热点名 密码
+    elseif StackStr_startswith(cmd_str, "WIFI ") then
+        local cmd_len = StackStr_len(cmd_str)
+        local space_idx = -1
+        
+        -- 极速探针：寻找热点名和密码之间的空格
+        for i = 5, cmd_len - 1 do
+            if C_ESP_IDF.l2c_get_byte(cmd_str, 1 + i) == 32 then
+                space_idx = i
+                break
+            end
+        end
+        
+        if space_idx > 0 then
+            local ssid_buf = L2C_Buffer(64); local ssid_str = L2C_Ref(ssid_buf); StackStr_init(ssid_str)
+            local pwd_buf  = L2C_Buffer(64); local pwd_str  = L2C_Ref(pwd_buf);  StackStr_init(pwd_str)
+            
+            -- 0-GC 游标提取 SSID
+            for i = 5, space_idx - 1 do
+                StackStr_append_char(ssid_str, 64, C_ESP_IDF.l2c_get_byte(cmd_str, 1 + i))
+            end
+            -- 0-GC 游标提取 PASSWORD
+            for i = space_idx + 1, cmd_len - 1 do
+                StackStr_append_char(pwd_str, 64, C_ESP_IDF.l2c_get_byte(cmd_str, 1 + i))
+            end
+            
+            print(">> [WIFI] 收到新热点配置: ", StackStr_get(ssid_str))
+            
+            -- 物理扰乱！
+            NVS_Cipher_StackStr(ssid_str)
+            NVS_Cipher_StackStr(pwd_str)
+            
+            -- 砸入底层 NVS
+            C_NVS.l2c_nvs_set_stackstr("w_ssid", ssid_str)
+            C_NVS.l2c_nvs_set_stackstr("w_pwd", pwd_str)
+            
+            print(">> [WIFI] 凭据已加密打入 NVS 黑匣子！下次重启将连接此热点。")
+            OLED_print(6, "WIFI SAVED! ")
+        else
+            print(">> [错误] 格式不对！请使用: WIFI <SSID> <PASSWORD>")
+        end
     else
         print(">> [错误] 未知战术指令！")
         OLED_print(6, "Unknown CMD!")
@@ -322,6 +360,39 @@ local rx_payload_str = L2C_Ref(rx_payload_buf)
 StackStr_init(rx_payload_str)
 
 local scan_hold_ticks = 0 -- [核心新增] 猎犬屏息倒计时器
+
+-- =======================================================
+-- 开机自治引擎启动：提取加密 Wi-Fi 凭证！
+-- =======================================================
+
+-- 注意：WiFi 初始化极度依赖 NVS，所以必须在 NVS_init 之后调用！
+local w_ssid_buf = L2C_Buffer(64); local w_ssid_str = L2C_Ref(w_ssid_buf)
+local w_pwd_buf  = L2C_Buffer(64); local w_pwd_str  = L2C_Ref(w_pwd_buf)
+
+if C_NVS.l2c_nvs_get_stackstr("w_ssid", w_ssid_str, 64) == 1 and 
+   C_NVS.l2c_nvs_get_stackstr("w_pwd", w_pwd_str, 64) == 1 then
+    
+    -- 将 NVS 里取出的乱码进行 XOR 对称还原！
+    NVS_Cipher_StackStr(w_ssid_str)
+    NVS_Cipher_StackStr(w_pwd_str)
+    
+    local WIFI_SSID = StackStr_get(w_ssid_str)
+    local WIFI_PASS = StackStr_get(w_pwd_str)
+
+    WIFI_init_sta(WIFI_SSID, WIFI_PASS)
+    OLED_print(7, "WiFi: Connecting...")
+
+    print(" [WiFi] 密文凭证提取成功！正在启动自治连接引擎: ", WIFI_SSID)
+else
+    print(" [WiFi] NVS 黑匣子内无凭据。Wi-Fi 引擎已挂起，请用WIFI指令注入。")
+end
+
+-- 准备一块 0-GC 栈内存，专门用来提取 IP 地址
+local ip_buf = L2C_Buffer(64)
+local ip_str = L2C_Ref(ip_buf)
+
+-- 记录网络状态机标志位
+local was_connected = false
 
 while true do
     local wake_reason = 1
@@ -406,12 +477,32 @@ while true do
                     local log_buf = L2C_Buffer(256)
                     local log_str = L2C_Ref(log_buf)
                     StackStr_init(log_str)
+
+                    -- 时间戳物理注入：用隔离缓冲接住 NTP 的覆写，防止吃字
+                    local time_buf = L2C_Buffer(32)
+                    local time_str = L2C_Ref(time_buf)
+                    StackStr_init(time_str)
+                    NTP_get_time_str(time_str)
+
+                    -- 安全拼接进日志大缸
+                    StackStr_append_char(log_str, 256, 91) -- 写入 '['
+                    StackStr_append_str(log_str, 256, StackStr_get(time_str))
+                    StackStr_append_char(log_str, 256, 93) -- 写入 ']'
+
                     StackStr_append_str(log_str, 256, "[TEXT] FROM: ")
                     StackStr_append_int(log_str, 256, m_from)
                     StackStr_append_str(log_str, 256, " MSG: ")
                     StackStr_append_str(log_str, 256, msg)
                     SDCard_append("radar.log", StackStr_get(log_str))
+
+                    -- 这里填你 Mac 电脑在局域网里的真实 IP 地址！比如 192.168.234.xxx
+                    local MAC_IP = "192.168.234.110" 
+                    local TARGET_PORT = 8888
                     
+                    UDP_send(MAC_IP, TARGET_PORT, StackStr_get(log_str), StackStr_len(log_str))
+                    
+                    print(" [UDP] 日志已飞向指挥中心！")
+
                 elseif dec_st == 3 then
                     print(" [POSITION] 拦截到目标的 GPS 坐标包！")
                     OLED_print(3, ">> GPS POSITION")
@@ -420,6 +511,17 @@ while true do
                     local log_buf = L2C_Buffer(128)
                     local log_str = L2C_Ref(log_buf)
                     StackStr_init(log_str)
+
+                    -- [修复] 使用时间缓冲杯，绝对防止吃字！
+                    local time_buf = L2C_Buffer(32)
+                    local time_str = L2C_Ref(time_buf)
+                    StackStr_init(time_str)
+                    NTP_get_time_str(time_str)
+
+                    StackStr_append_char(log_str, 128, 91) 
+                    StackStr_append_str(log_str, 128, StackStr_get(time_str))
+                    StackStr_append_char(log_str, 128, 93)
+                    
                     StackStr_append_str(log_str, 128, "[GPS] FROM: ")
                     StackStr_append_int(log_str, 128, m_from)
                     SDCard_append("radar.log", StackStr_get(log_str))
@@ -488,5 +590,39 @@ while true do
             StackStr_append_char(ble_str, 64, bc)
         end
         bc = BLE_pop_char()
+    end
+
+    -- 【新增：异步网络状态显示】
+    -- 这种非阻塞查询耗时不到 1 纳秒，绝对不影响射频性能！
+    local is_conn = WIFI_is_connected()
+    if is_conn and not was_connected then
+        was_connected = true
+        WIFI_get_ip_str(ip_str)
+        print(" [WiFi] 连接成功！IP 分配: ", StackStr_get(ip_str))
+
+        -- 【点燃 NTP 时间同步！】
+        print(" [NTP] 正在向宇宙索要当前绝对时间...")
+        NTP_init()
+
+        UDP_server_init(8889) 
+        print(" [UDP] 战术指令监听引擎已在 8889 端口上线！")
+
+        OLED_clear_3to6()
+        OLED_print(6, "IP: ")
+        OLED_print(7, StackStr_get(ip_str))
+    elseif not is_conn and was_connected then
+        was_connected = false
+        print(" [WiFi] 连接断开，后台尝试重连中...")
+        OLED_clear_3to6()
+        OLED_print(7, "WiFi: Disconnected")
+    end
+
+    -- 【链路 3】：处理 UDP 远程空降指令！
+    local udp_buf = L2C_Buffer(128)
+    local udp_str = L2C_Ref(udp_buf)
+    
+    if UDP_pop_cmd(udp_str, 128) then
+        print(" [WIFI-UDP] 收到 Mac 指挥中心最高指令: ", StackStr_get(udp_str))
+        CMD_Process(udp_str) -- 直接抛给网关路由中心执行！
     end
 end

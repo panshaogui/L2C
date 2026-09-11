@@ -8,6 +8,7 @@ clib/l2c_bundle.h linguist-generated
 
 # 2. 屏蔽第三方 Lua 库 (Teal, Inspect, Nelua)
 libs/** linguist-vendored
+clib/mesh_proto/** linguist-vendored
 
 # 3. 屏蔽生成的中间态文件
 native_app* linguist-generated

@@ -38,3 +38,35 @@ static inline void l2c_nvs_set_int(const char* key, int32_t val) {
     nvs_set_i32(g_l2c_nvs_handle, key, val);
     nvs_commit(g_l2c_nvs_handle);
 }
+
+// =========================================================================
+// [L2C 黑匣子] 0-GC NVS 字符串加密存取引擎
+// =========================================================================
+
+int l2c_nvs_set_stackstr(const char* key, void* str_ptr) {
+    nvs_handle_t handle;
+    if (nvs_open("storage", NVS_READWRITE, &handle) == ESP_OK) {
+        // 直接读取 StackString 偏移 1 处的原生 C 字符串
+        nvs_set_str(handle, key, (const char*)((uint8_t*)str_ptr + 1));
+        nvs_commit(handle);
+        nvs_close(handle);
+        return 1;
+    }
+    return 0;
+}
+
+int l2c_nvs_get_stackstr(const char* key, void* str_ptr, int max_len) {
+    nvs_handle_t handle;
+    if (nvs_open("storage", NVS_READONLY, &handle) == ESP_OK) {
+        size_t req_len = 0;
+        // 先探测长度，如果存在且未越界，直接提取！
+        if (nvs_get_str(handle, key, NULL, &req_len) == ESP_OK && req_len <= max_len) {
+            nvs_get_str(handle, key, (char*)((uint8_t*)str_ptr + 1), &req_len);
+            ((uint8_t*)str_ptr)[0] = (uint8_t)(req_len - 1); // 自动补齐 0-GC 长度头
+            nvs_close(handle);
+            return 1;
+        }
+        nvs_close(handle);
+    }
+    return 0;
+}
