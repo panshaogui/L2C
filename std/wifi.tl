@@ -13,6 +13,7 @@ local type C_WIFI = record
     l2c_wifi_init_sta: function(string, string)
     l2c_wifi_is_connected: function(): integer
     l2c_wifi_get_ip_str: function(any)
+    l2c_wifi_disable_power_save: function()
 end
 
 local function WIFI_init_sta(ssid: string, pass: string)
@@ -25,4 +26,8 @@ end
 
 local function WIFI_get_ip_str(ptr: any)
     C_WIFI.l2c_wifi_get_ip_str(ptr)
+end
+
+local function WIFI_Disable_PowerSave()
+    C_WIFI.l2c_wifi_disable_power_save()
 end
