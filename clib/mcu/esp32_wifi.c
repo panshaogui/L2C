@@ -74,3 +74,8 @@ void l2c_wifi_get_ip_str(void* str_ptr) {
         l2c_str_append_cstr(str_ptr, 64, "0.0.0.0");
     }
 }
+
+// [网络装甲] 强制关闭 Wi-Fi 休眠，换取 1ms 级超低延迟！
+void l2c_wifi_disable_power_save(void) {
+    esp_wifi_set_ps(WIFI_PS_NONE);
+}

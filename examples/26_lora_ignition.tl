@@ -394,6 +394,10 @@ local ip_str = L2C_Ref(ip_buf)
 -- 记录网络状态机标志位
 local was_connected = false
 
+local MAC_C2_IP = "192.168.234.110"  -- 您的 Mac 真实 IP
+local C2_PORT = 8888
+local heartbeat_ticks = 0
+
 while true do
     local wake_reason = 1
     
@@ -401,7 +405,10 @@ while true do
     if g_is_scanning then
         wake_reason = C_ESP_IDF.l2c_wait_for_radio_ms(150)
     else
-        C_ESP_IDF.l2c_wait_for_radio()
+        -- [战术神经激活] 绝对不能死等！
+        -- 哪怕静默监听，最多睡 50ms (20Hz 刷新率) 必须醒来查收 Mac 空降的 UDP 密令！
+        -- C_ESP_IDF.l2c_wait_for_radio()
+        wake_reason = C_ESP_IDF.l2c_wait_for_radio_ms(50)
     end
     
     -- 【扫频逻辑引擎：带屏息防御】
@@ -434,8 +441,18 @@ while true do
     -- 【业务层统筹：获取射频战果】
     local hit, irq_high, irq_low = SX1262_poll_rx(rx_payload_str)
     if hit then
+        -- [新增] 核心判断 1：是否是 TxDone (发射成功！)
+        if (irq_low & 1) == 1 then
+            print(" [L2C-TX] 炮弹已出膛！(TxDone)")
+            OLED_print(6, "TX SUCCESS! ")
+            
+            -- 向 Mac 战术中心发射捷报！
+            local tx_rep_buf = L2C_Buffer(64); local tx_rep_str = L2C_Ref(tx_rep_buf); StackStr_init(tx_rep_str)
+            StackStr_append_str(tx_rep_str, 64, "[TX DONE] 射击完毕，载荷已成功打入天空！")
+            UDP_send(MAC_C2_IP, C2_PORT, StackStr_get(tx_rep_str), StackStr_len(tx_rep_str))
+
         -- 核心判断：是否是 RxDone (接收成功终端态)
-        if (irq_low & 2) == 2 then
+        elseif (irq_low & 2) == 2 then
             scan_hold_ticks = 0 -- 收到完整数据，取消屏息
             
             -- 猎物彻底锁定！关闭扫描引擎！
@@ -494,12 +511,8 @@ while true do
                     StackStr_append_str(log_str, 256, " MSG: ")
                     StackStr_append_str(log_str, 256, msg)
                     SDCard_append("radar.log", StackStr_get(log_str))
-
-                    -- 这里填你 Mac 电脑在局域网里的真实 IP 地址！比如 192.168.234.xxx
-                    local MAC_IP = "192.168.234.110" 
-                    local TARGET_PORT = 8888
                     
-                    UDP_send(MAC_IP, TARGET_PORT, StackStr_get(log_str), StackStr_len(log_str))
+                    UDP_send(MAC_C2_IP, C2_PORT, StackStr_get(log_str), StackStr_len(log_str))
                     
                     print(" [UDP] 日志已飞向指挥中心！")
 
@@ -604,8 +617,17 @@ while true do
         print(" [NTP] 正在向宇宙索要当前绝对时间...")
         NTP_init()
 
+        -- [核心提速] 强制关闭省电模式，全功率迎接 Mac 指挥中心 UDP 空降！
+        WIFI_Disable_PowerSave()
+
         UDP_server_init(8889) 
         print(" [UDP] 战术指令监听引擎已在 8889 端口上线！")
+
+        -- 节点上线，主动向指挥中心发射一发信号弹进行 IP 注册！
+        local boot_buf = L2C_Buffer(64); local boot_str = L2C_Ref(boot_buf); StackStr_init(boot_str)
+        StackStr_append_str(boot_str, 64, "[SYSTEM] L2C Node is ONLINE and ARMED!")
+
+        UDP_send(MAC_C2_IP, C2_PORT, StackStr_get(boot_str), StackStr_len(boot_str))
 
         OLED_clear_3to6()
         OLED_print(6, "IP: ")
@@ -624,5 +646,21 @@ while true do
     if UDP_pop_cmd(udp_str, 128) then
         print(" [WIFI-UDP] 收到 Mac 指挥中心最高指令: ", StackStr_get(udp_str))
         CMD_Process(udp_str) -- 直接抛给网关路由中心执行！
+    end
+
+    -- 【链路 4】：战术心跳发生器 (每 10 秒跳动一次)
+    if is_conn then
+        heartbeat_ticks = heartbeat_ticks + 1
+        -- [防丢包强化] 100 个 tick = 5 秒。高频心跳打穿路由器 UDP 丢包壁垒！
+        if heartbeat_ticks >= 100 then
+            heartbeat_ticks = 0
+            
+            local hb_buf = L2C_Buffer(32)
+            local hb_str = L2C_Ref(hb_buf)
+            StackStr_init(hb_str)
+            StackStr_append_str(hb_str, 32, "[HEARTBEAT] L2C ALIVE")
+            
+            UDP_send(MAC_C2_IP, C2_PORT, StackStr_get(hb_str), StackStr_len(hb_str))
+        end
     end
 end

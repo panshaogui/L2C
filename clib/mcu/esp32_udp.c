@@ -53,24 +53,27 @@ int l2c_udp_pop_cmd(void* str_ptr, int max_len) {
 }
 
 // =========================================================================
-// [发送端] 0-GC 极速单发探针：打完就关，绝不维护状态，免疫网络波动！
+// [发送端] 0-GC 极速探针：复用监听端口的 Socket，免去建立连接的极高开销！
 // =========================================================================
 void l2c_udp_send(const char* target_ip, int target_port, const void* data, int len) {
     if (len <= 0 || !data) return;
 
-    // 创建 UDP 极速套接字
-    int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
-    if (sock < 0) return;
+    // [核心优化] 如果接收端的炮管已经建好，直接复用！
+    int sock = g_l2c_udp_sock;
+    int is_temp = 0;
+    if (sock < 0) {
+        sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
+        if (sock < 0) return;
+        is_temp = 1;
+    }
 
-    // 装定目标坐标
     struct sockaddr_in dest_addr;
     dest_addr.sin_addr.s_addr = inet_addr(target_ip);
     dest_addr.sin_family = AF_INET;
     dest_addr.sin_port = htons(target_port);
 
-    // 轰炸！
     sendto(sock, data, len, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
     
-    // 销毁炮管
-    close(sock);
+    // 只有临时建的炮管才销毁，主炮管常驻！
+    if (is_temp) close(sock);
 }
