@@ -9,12 +9,19 @@
 
 local type C_SDCARD = record
     l2c_sdcard_init: function(integer, integer, integer, integer): integer
+    l2c_sdcard_init1: function(integer, integer, integer, integer): integer
     l2c_sdcard_append: function(string, string)
 end
 
 local function SDCard_init(miso: integer, mosi: integer, sck: integer, cs: integer): boolean
     local res = C_SDCARD.l2c_sdcard_init(miso, mosi, sck, cs)
     if res == 0 then return true else return false end
+end
+
+local function SDCard_init1(miso: integer, mosi: integer, sck: integer, cs: integer): boolean
+    local res = C_SDCARD.l2c_sdcard_init1(miso, mosi, sck, cs)
+    -- [修复] 只有 C 函数返回 1 才是真正的挂载成功！
+    return res == 1 
 end
 
 local function SDCard_append(filename: string, text: string)

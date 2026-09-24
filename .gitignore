@@ -11,23 +11,7 @@ apply_license.sh
 .l2c_temp_*.nelua
 .l2c_error_dump.tl
 *.o
-*.c
-!clib/*.cpp
-!clib/*.h
-!clib/*.c
-!clib/mcu/*.h
-!clib/mcu/*.c
 
-!clib/mesh_proto/meshtastic/*.h
-!clib/mesh_proto/meshtastic/*.c
-
-!clib/nelua_runtime/*.c
-!clib/nelua_runtime/lpeglabel/*.c
-!clib/nelua_runtime/lpeglabel/*.h
-!clib/nelua_runtime/lua/*.c
-!clib/nelua_runtime/lua/*.h
-
-nelua-lang/
 clib/l2c_bundle.h
 
 # ESP-IDF / Pico Build Folders

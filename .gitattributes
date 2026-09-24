@@ -11,6 +11,9 @@ libs/** linguist-vendored
 clib/mesh_proto/** linguist-vendored
 clib/pb* linguist-vendored
 
+clib/esp32-camera/** linguist-vendored
+clib/nuklear* linguist-vendored
+
 # 3. 屏蔽生成的中间态文件
 native_app* linguist-generated
 l2c_bin* linguist-generated
