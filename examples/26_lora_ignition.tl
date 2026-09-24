@@ -12,6 +12,7 @@
 --@l2c_import: std/wifi.tl
 --@l2c_import: std/ntp.tl
 --@l2c_import: std/udp.tl
+--@l2c_import: std/ota.tl
 
 -- EoRa-S3 默认 OLED 引脚: SDA=18, SCL=17
 
@@ -340,6 +341,17 @@ local function CMD_Process(cmd_str: any)
         else
             print(">> [错误] 格式不对！请使用: WIFI <SSID> <PASSWORD>")
         end
+    -- 6. OTA 升级
+    elseif StackStr_startswith(cmd_str, "OTA ") then
+        -- 解析出 http://... 的 URL
+        local url_buf = L2C_Buffer(128); local url_str = L2C_Ref(url_buf); StackStr_init(url_str)
+        local cmd_len = StackStr_len(cmd_str)
+        for i = 4, cmd_len - 1 do
+            StackStr_append_char(url_str, 128, C_ESP_IDF.l2c_get_byte(cmd_str, 1 + i))
+        end
+        print(">> [COMMAND] 收到最高空中指令，准备拉取固件: ", StackStr_get(url_str))
+        -- 呼叫 OTA 线程
+        OTA_Start(StackStr_get(url_str))
     else
         print(">> [错误] 未知战术指令！")
         OLED_print(6, "Unknown CMD!")

@@ -1,0 +1,7 @@
+# Name,   Type, SubType, Offset,  Size, Flags
+nvs,      data, nvs,     0x9000,  0x4000,
+otadata,  data, ota,     0xd000,  0x2000,
+phy_init, data, phy,     0xf000,  0x1000,
+# 16MB 的空间极其巨大，每个 OTA 区给 6MB，随便装！
+ota_0,    app,  ota_0,   0x10000, 6M,
+ota_1,    app,  ota_1,   ,        6M,
