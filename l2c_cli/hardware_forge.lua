@@ -102,16 +102,30 @@ function M.sniff_and_forge(bundled_code)
         cfg.spinlock_c_decl = [[
             #ifndef L2C_SPINLOCK_DEFINED
             #define L2C_SPINLOCK_DEFINED
-            #include <stdatomic.h>
-            // [核心修复：64 字节 Cache Line 物理隔离，彻底粉碎 False Sharing 性能风暴]
-            typedef union { atomic_flag lock; uint8_t _pad[64]; } l2c_aligned_lock_t;
+            #include "freertos/FreeRTOS.h"
+            #include "freertos/task.h"
+
+            // [传承长官的黑魔法：64 字节 Cache Line 物理隔离，彻底粉碎 False Sharing]
+            // [修正核心：使用 ESP-IDF 原生的 portMUX_TYPE，屏蔽中断，杜绝 ISR 死锁！]
+            typedef union { portMUX_TYPE lock; uint8_t _pad[64]; } l2c_aligned_lock_t;
+            
             static l2c_aligned_lock_t g_l2c_locks[8] = {
-                {ATOMIC_FLAG_INIT}, {ATOMIC_FLAG_INIT}, {ATOMIC_FLAG_INIT}, {ATOMIC_FLAG_INIT},
-                {ATOMIC_FLAG_INIT}, {ATOMIC_FLAG_INIT}, {ATOMIC_FLAG_INIT}, {ATOMIC_FLAG_INIT}
+                {portMUX_INITIALIZER_UNLOCKED}, {portMUX_INITIALIZER_UNLOCKED}, 
+                {portMUX_INITIALIZER_UNLOCKED}, {portMUX_INITIALIZER_UNLOCKED},
+                {portMUX_INITIALIZER_UNLOCKED}, {portMUX_INITIALIZER_UNLOCKED}, 
+                {portMUX_INITIALIZER_UNLOCKED}, {portMUX_INITIALIZER_UNLOCKED}
             };
-            static inline void l2c_spinlock_lock(int id) { while (atomic_flag_test_and_set_explicit(&g_l2c_locks[id & 7].lock, memory_order_acquire)) { asm volatile("nop"); } }
-            static inline void l2c_spinlock_unlock(int id) { __sync_synchronize(); atomic_flag_clear_explicit(&g_l2c_locks[id & 7].lock, memory_order_release); }
-            static inline void l2c_launch_core1(void* func_ptr) { xTaskCreatePinnedToCore((TaskFunction_t)func_ptr, "c1", 8192, NULL, 1, NULL, 1); }
+            
+            // taskENTER_CRITICAL 会自动处理自旋等待，并在持有锁期间屏蔽当前核心的中断
+            static inline void l2c_spinlock_lock(int id) { 
+                taskENTER_CRITICAL(&g_l2c_locks[id & 7].lock); 
+            }
+            static inline void l2c_spinlock_unlock(int id) { 
+                taskEXIT_CRITICAL(&g_l2c_locks[id & 7].lock); 
+            }
+            static inline void l2c_launch_core1(void* func_ptr) { 
+                xTaskCreatePinnedToCore((TaskFunction_t)func_ptr, "c1", 8192, NULL, 1, NULL, 1); 
+            }
             #define L2C_SPINLOCK_LOCK(id)   l2c_spinlock_lock(id)
             #define L2C_SPINLOCK_UNLOCK(id) l2c_spinlock_unlock(id)
             #endif
