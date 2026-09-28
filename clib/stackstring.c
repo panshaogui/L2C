@@ -84,3 +84,15 @@ static inline int l2c_str_parse_hex(void* ptr, int offset) {
     if (offset >= len) return 0;
     return (int)strtol((const char*)((uint8_t*)ptr + 1 + offset), NULL, 16);
 }
+
+// 0-GC 极速拷贝，严守最大容量防线
+static inline void l2c_str_copy(void* dst, void* src, int max_len) {
+    if (!dst || !src) return;
+    uint8_t* d = (uint8_t*)dst;
+    uint8_t* s = (uint8_t*)src;
+    int len = s[0];
+    if (len > max_len - 1) len = max_len - 1;
+    d[0] = len;
+    memcpy(&d[1], &s[1], len);
+    d[len + 1] = '\0';
+}

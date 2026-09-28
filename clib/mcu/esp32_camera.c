@@ -45,33 +45,8 @@ static inline int l2c_cam_init() {
     // [核心防烧毁镇压] 降频至 10MHz，强行分配 2 帧在 PSRAM！
     config.xclk_freq_hz = 10000000; 
 
-    /*
-    
-    config.pixel_format = PIXFORMAT_RGB565; 
-    config.frame_size = FRAMESIZE_QVGA;     // 320x240
-    config.jpeg_quality = 12;
-    config.fb_count = 2;
-    config.fb_location = CAMERA_FB_IN_PSRAM; 
-    
-    // [终极画面镇压] 绝对不允许中途抓帧！
-    // CAMERA_GRAB_LATEST：DMA 在后台永远只保存最完整的最新帧！CPU 拿到的绝对是完美无撕裂的画面！
-    config.grab_mode = CAMERA_GRAB_LATEST;
-
-    esp_err_t err = esp_camera_init(&config);
-    
-    // [OV5640 专属修正] 如果画面颜色不对，或者倒置了，可以在这里告诉传感器的寄存器自己翻转：
-    if (err == ESP_OK) {
-        sensor_t *s = esp_camera_sensor_get();
-
-        // 如果摄像头物理贴倒是 180 度，直接在传感器端进行硬件翻转！
-        s->set_vflip(s, 1);   // 如果画面上下颠倒，取消这行注释
-        s->set_hmirror(s, 0); // 如果画面左右相反，取消这行注释
-        
-    }
-
-    */
-
-    // [降维打击] 强行输出 JPEG 视频流！
+    // 切回 JPEG！因为我们在业务层抢占了高地，现在不会再报错了。
+    // JPEG 将极大降低 PSRAM 写入带宽，彻底解决硬件丢帧导致的“麻花”撕裂！
     config.pixel_format = PIXFORMAT_JPEG; 
     config.frame_size = FRAMESIZE_QVGA;  // 320x240 
     config.jpeg_quality = 12;            // 极高画质

@@ -11,10 +11,9 @@
 #include "freertos/semphr.h"
 #include <string.h>
 #include <math.h> /* 解决 ceil 缺失问题 */
-#include "freertos/semphr.h"
 
-static esp_lcd_panel_handle_t g_panel_handle;
-static SemaphoreHandle_t g_lcd_trans_sem;
+extern esp_lcd_panel_handle_t g_panel_handle;
+extern SemaphoreHandle_t g_lcd_trans_sem;
 
 // =========================================================================
 // [L2C 视觉引擎] Nuklear IMGUI 配置与实例化
@@ -55,8 +54,8 @@ int l2c_nk_init() {
     if (g_rawfb) return 1;
     
     // 申请最大物理需求显存，终生不释放
-    g_nk_fb_16 = (uint16_t*)heap_caps_malloc(240 * 320 * 2, MALLOC_CAP_SPIRAM);
-    g_nk_tex_mem = heap_caps_malloc(256 * 1024, MALLOC_CAP_SPIRAM);
+    g_nk_fb_16 = (uint16_t*)heap_caps_aligned_alloc(64,240 * 320 * 2, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    g_nk_tex_mem = heap_caps_aligned_alloc(64,256 * 1024, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!g_nk_fb_16 || !g_nk_tex_mem) return 0;
 
     // 默认按照全屏 240x320 挂载
@@ -107,18 +106,40 @@ void l2c_nk_input(int pressed, int x, int y, int offset_y) {
 void l2c_nk_render(int offset_y, int w, int h) {
     if (!g_rawfb || !g_panel_handle) return;
 
-    // 1. Nuklear 渲染 UI
     nk_rawfb_render(g_rawfb, nk_rgb(40, 40, 40), 1);
     
-    // 2. 就地洗影去噪点 (仅处理被使用的 w*h 区域，极速)
     for (int i = 0; i < w * h; i++) {
         uint16_t c = g_nk_fb_16[i];
         g_nk_fb_16[i] = (c >> 8) | (c << 8); 
     }
 
-    // 3. 靶向填补：DMA 将画布严丝合缝地贴在 offset_y 的位置
-    esp_lcd_panel_draw_bitmap(g_panel_handle, 0, offset_y, w, offset_y + h, g_nk_fb_16);
-    xSemaphoreTake(g_lcd_trans_sem, portMAX_DELAY);
+    // [终极防线] 部署 3.8KB 内部 SRAM 防空洞
+    int chunk_lines = 8;
+    static uint16_t* dma_buf = NULL;
+    if (!dma_buf) {
+        dma_buf = (uint16_t*)heap_caps_malloc(240 * chunk_lines * 2, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
+    }
+    if (!dma_buf) return;
+
+    for (int y = 0; y < h; y += chunk_lines) {
+        int lines_to_draw = (y + chunk_lines > h) ? (h - y) : chunk_lines;
+        
+        // 将 PSRAM 的画布切片，安全搬运到内部防空洞
+        memcpy(dma_buf, &g_nk_fb_16[y * w], w * lines_to_draw * 2);
+        
+        esp_err_t err = esp_lcd_panel_draw_bitmap(
+            g_panel_handle, 
+            0, 
+            offset_y + y, 
+            w, 
+            offset_y + y + lines_to_draw, 
+            dma_buf 
+        );
+        
+        if (err == ESP_OK) {
+            xSemaphoreTake(g_lcd_trans_sem, portMAX_DELAY);
+        }
+    }
     
     nk_clear(&g_rawfb->ctx);
 }

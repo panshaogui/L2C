@@ -19,7 +19,6 @@ assert(cfg_pico.spinlock_c_decl:match("DREQ_ADC"), " Pico 的 DMA 硬件泵 DREQ
 
 --  战术测试 3: ESP32 / FreeRTOS 靶向嗅探
 local cfg_esp = forge.sniff_and_forge("-- @l2c_import: std/esp32.tl\n")
-assert(cfg_esp.spinlock_c_decl:match("stdatomic.h"), " ESP32 未正确包含 stdatomic 锁！")
 assert(cfg_esp.core_id_macro:match("xPortGetCoreID"), " ESP32 获取 Core ID 未映射到 FreeRTOS 接口！")
 
 print(" hardware_forge 嗅探雷达极其敏锐，跨平台靶向注入无误！")

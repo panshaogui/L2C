@@ -16,6 +16,9 @@ local type C_UDP = record
     -- [新增] 服务端探针
     l2c_udp_server_init: function(integer)
     l2c_udp_pop_cmd: function(any, integer): integer
+
+    l2c_udp_pop_cmd_with_ip: function(any, integer, any): integer
+    l2c_ip_to_str: function(integer, any)
 end
 
 -- ==========================================================
@@ -33,4 +36,13 @@ end
 -- 直接将取出的命令灌入 StackString 缓冲区
 local function UDP_pop_cmd(str_ptr: any, max_len: integer): boolean
     return C_UDP.l2c_udp_pop_cmd(str_ptr, max_len) == 1
+end
+
+-- 提取命令并返回发送者的 32 位 IP 整数 (利用 L2C_Buffer 做指针传出)
+local function UDP_pop_cmd_with_ip(str_ptr: any, max_len: integer, ip_out_buf: any): boolean
+    return C_UDP.l2c_udp_pop_cmd_with_ip(str_ptr, max_len, ip_out_buf) == 1
+end
+
+local function IP_to_Str(ip: integer, str_ptr: any)
+    C_UDP.l2c_ip_to_str(ip, str_ptr)
 end

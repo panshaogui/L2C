@@ -7,6 +7,7 @@
 
 local type C_LCD = record
     l2c_lcd_init: function(): integer
+    l2c_spi_bus_init: function(integer, integer, integer, integer): integer
     -- l2c_lcd_draw_frame: function(any, integer, integer)
     -- l2c_lcd_draw_cam_frame: function(any)
     l2c_lcd_draw_cam_cropped: function(any)
@@ -43,4 +44,9 @@ end
 
 global function LCD_Draw_JPG_From_SD(filepath: string): integer
     return C_LCD.l2c_lcd_draw_jpg_from_sd(filepath)
+end
+
+-- [新增] 暴露总线重火力配置权
+global function SPI_Bus_Init(host_id: integer, miso: integer, mosi: integer, sck: integer): boolean
+    return C_LCD.l2c_spi_bus_init(host_id, miso, mosi, sck) == 1
 end

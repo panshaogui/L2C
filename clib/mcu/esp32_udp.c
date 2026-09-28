@@ -77,3 +77,34 @@ void l2c_udp_send(const char* target_ip, int target_port, const void* data, int 
     // 只有临时建的炮管才销毁，主炮管常驻！
     if (is_temp) close(sock);
 }
+
+// =========================================================================
+// [向下兼容增量] 提取 IP 的 UDP 接收，与 IP 字符串化转换
+// =========================================================================
+int l2c_udp_pop_cmd_with_ip(void* str_ptr, int max_len, uint32_t* out_ip) {
+    if (g_l2c_udp_sock < 0) return 0;
+    
+    uint8_t* p = (uint8_t*)str_ptr;
+    struct sockaddr_storage source_addr;
+    socklen_t socklen = sizeof(source_addr);
+    
+    int len = recvfrom(g_l2c_udp_sock, p + 1, max_len - 1, 0, (struct sockaddr *)&source_addr, &socklen);
+    if (len > 0) {
+        p[0] = (uint8_t)len;       
+        p[len + 1] = '\0';         
+        if (out_ip) {
+            struct sockaddr_in* addr_in = (struct sockaddr_in*)&source_addr;
+            *out_ip = addr_in->sin_addr.s_addr; // 提取 32 位整型 IP
+        }
+        return 1;
+    }
+    return 0;
+}
+
+// 0-GC：将 32 位网络端序 IP 转换为可读格式直接存入 StackString
+void l2c_ip_to_str(uint32_t ip, void* str_ptr) {
+    uint8_t* a = (uint8_t*)&ip;
+    uint8_t* p = (uint8_t*)str_ptr;
+    int len = snprintf((char*)&p[1], 32, "%d.%d.%d.%d", a[0], a[1], a[2], a[3]);
+    p[0] = (uint8_t)len;
+}

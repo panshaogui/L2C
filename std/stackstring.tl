@@ -24,6 +24,7 @@ local type C_STACKSTR = record
     l2c_str_startswith: function(any, string): integer
     l2c_str_parse_int: function(any, integer): integer
     l2c_str_parse_hex: function(any, integer): integer
+    l2c_str_copy: function(any, any, integer)
 end
 
 local function StackStr_init(ptr: any)
@@ -72,4 +73,8 @@ end
 
 local function StackStr_parse_hex(ptr: any, offset: integer): integer
     return C_STACKSTR.l2c_str_parse_hex(ptr, offset)
+end
+
+local function StackStr_copy(dest: any, src: any, max_len: integer)
+    C_STACKSTR.l2c_str_copy(dest, src, max_len)
 end
