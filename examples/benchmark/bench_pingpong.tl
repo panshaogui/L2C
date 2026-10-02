@@ -1,9 +1,9 @@
 -- ==============================================================================
 -- 压测 1：跨核双向 Ping-Pong 延迟 (真实物理总线穿透)
 -- ==============================================================================
--- @l2c_import: std/multicore.tl
--- @l2c_import: std/ringbuffer.tl
--- @l2c_import: std/time.tl
+require "std.multicore"
+require "std.ringbuffer"
+require "std.time"
 -- @l2c_include: stdio.h
 
 local type C_STDIO = record printf: function(string, integer): integer end

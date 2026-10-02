@@ -1,4 +1,4 @@
---@l2c_import: std/stackstring.tl
+require "std.stackstring"
 
 print("========== [L2C StackString 0-GC 单元测试] ==========")
 

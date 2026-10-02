@@ -8,33 +8,33 @@
 -- @l2c_source: clib/mcu/esp32_ssd1306.c
 
 -- L2C FFI 探针
-local type C_OLED = record
+global type C_OLED = record
     l2c_oled_init: function(integer, integer)
     l2c_oled_print: function(integer, string)
     l2c_oled_print_num: function(integer, string, integer)
 end
 
-local function OLED_init(sda: integer, scl: integer)
+global function OLED_init(sda: integer, scl: integer)
     C_OLED.l2c_oled_init(sda, scl)
 end
 
 -- line: 0 ~ 7 (一共八行)
-local function OLED_print(line: integer, txt: string)
+global function OLED_print(line: integer, txt: string)
     C_OLED.l2c_oled_print(line, txt)
 end
 
-local function OLED_print_num(line: integer, prefix: string, num: integer)
+global function OLED_print_num(line: integer, prefix: string, num: integer)
     C_OLED.l2c_oled_print_num(line, prefix, num)
 end
 
 -- 瞬间清空物理显存
-local function OLED_clear()
+global function OLED_clear()
     for i = 0, 7 do
         C_OLED.l2c_oled_print(i, "")
     end
 end
 
-local function OLED_clear_3to6()
+global function OLED_clear_3to6()
     for i = 3, 6 do
         C_OLED.l2c_oled_print(i, "")
     end

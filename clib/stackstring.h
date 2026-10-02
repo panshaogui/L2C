@@ -17,4 +17,4 @@ const char* l2c_str_get(void* ptr);
 int l2c_str_len(void* ptr);
 int l2c_str_eq(void* ptr, const char* cmp);
 int l2c_str_to_int(void* ptr);
-void l2c_str_copy(void* dst, void* src, int max_len)
+void l2c_str_copy(void* dst, void* src, int max_len);

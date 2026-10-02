@@ -1,6 +1,6 @@
 -- examples/11_hft_sniper.tl
 -- 物理引入 L2C 标准库 (zmq 内部已经声明了 L2C_Buffer 和 L2C_Ref)
--- @l2c_import: std/zmq.tl
+require "std.zmq"
 
 -- 1. 定义交易所推送的二进制内存对齐结构
 local type TickPacket = record

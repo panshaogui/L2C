@@ -6,7 +6,7 @@
 -- std/dsp.tl
 -- 专为 L2C 单片机打造的纯物理 0-GC 信号处理库 (Q15 极速定点数 & 纯物理指针版)
 -- 浮点数 Goertzel 算法 (PC端调试用)
-local function dsp_goertzel_mag(samples_ptr_int: integer, coeff: number, n: integer): number
+global function dsp_goertzel_mag(samples_ptr_int: integer, coeff: number, n: integer): number
     local s_prev = 0.0
     local s_prev2 = 0.0
     
@@ -25,7 +25,7 @@ end
 -- samples_ptr_int: 物理波形内存地址 (经 L2C_PtrAsInt 强转的整数)
 -- coeff_q15: 预先算好的目标频率系数 = round(2 * cos(2*pi*f/fs) * 32768)
 -- n: 采样点数
-local function dsp_goertzel_mag_q15(samples_ptr_int: integer, coeff_q15: integer, n: integer): integer
+global function dsp_goertzel_mag_q15(samples_ptr_int: integer, coeff_q15: integer, n: integer): integer
     local s_prev: integer = 0
     local s_prev2: integer = 0
     

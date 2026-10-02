@@ -1,18 +1,18 @@
 -- examples/26_lora_ignition.tl
 
---@l2c_import: std/esp32.tl
---@l2c_import: std/oled_ssd1306.tl
---@l2c_import: std/nvs.tl
---@l2c_import: std/sdcard.tl
---@l2c_import: std/lora_sx1262.tl
---@l2c_import: std/uart.tl
---@l2c_import: std/ble_nus.tl
---@l2c_import: std/stackstring.tl
---@l2c_import: std/cmd_queue.tl
---@l2c_import: std/wifi.tl
---@l2c_import: std/ntp.tl
---@l2c_import: std/udp.tl
---@l2c_import: std/ota.tl
+require "std.esp32"
+require "std.oled_ssd1306"
+require "std.nvs"
+require "std.sdcard"
+require "std.lora_sx1262"
+require "std.uart"
+require "std.ble_nus"
+require "std.stackstring"
+require "std.cmd_queue"
+require "std.wifi"
+require "std.ntp"
+require "std.udp"
+require "std.ota"
 
 -- EoRa-S3 默认 OLED 引脚: SDA=18, SCL=17
 

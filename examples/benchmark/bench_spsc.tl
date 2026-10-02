@@ -1,5 +1,5 @@
--- @l2c_import: std/ringbuffer.tl
--- @l2c_import: std/time.tl
+require "std.ringbuffer"
+require "std.time"
 
 print(" L2C SPSC 无锁队列吞吐量极限压测开始...")
 

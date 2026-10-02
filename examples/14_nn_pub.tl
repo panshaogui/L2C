@@ -1,5 +1,5 @@
 -- examples/14_nn_pub.tl
--- @l2c_import: std/nanomsg.tl
+require "std.nanomsg"
 -- @l2c_include: unistd.h
 
 local type C_LIBC = record

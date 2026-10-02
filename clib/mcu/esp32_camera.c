@@ -156,3 +156,8 @@ void* l2c_cam_get_pixels(void* fb_ptr) {
     if (!fb_ptr) return NULL;
     return ((camera_fb_t*)fb_ptr)->buf;
 }
+
+// [新增：物理销毁摄像头 DMA 与内部队列，瞬间释放海量 SRAM！]
+void l2c_cam_deinit(void) {
+    esp_camera_deinit();
+}

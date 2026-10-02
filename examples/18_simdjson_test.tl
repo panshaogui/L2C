@@ -1,5 +1,5 @@
 -- examples/18_simdjson_test.tl
--- @l2c_import: std/simdjson.tl
+require "std.simdjson"
 
 print(" L2C AVX-512/SSE4.2 极限 JSON 解析引擎启动...")
 

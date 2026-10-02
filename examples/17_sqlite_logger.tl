@@ -1,5 +1,5 @@
 -- examples/17_sqlite_logger.tl
--- @l2c_import: std/sqlite.tl
+require "std.sqlite"
 -- @l2c_include: stdio.h
 
 local type C_LIBC = record snprintf: function(any, integer, string, integer): integer end

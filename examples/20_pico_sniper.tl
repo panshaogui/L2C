@@ -3,10 +3,10 @@
 -- 终极边缘声纹刺客：DMA 硬件泵 -> 无锁流水线 -> Core 1 Q15 DSP 大脑 -> 继电器
 -- ==============================================================================
 
--- @l2c_import: std/pico.tl
--- @l2c_import: std/multicore.tl
--- @l2c_import: std/ringbuffer.tl
--- @l2c_import: std/dsp.tl
+require "std.pico"
+require "std.multicore"
+require "std.ringbuffer"
+require "std.dsp"
 
 local function delay_ms(ms: integer)
     C_PICO.sleep_us(ms * 1000)

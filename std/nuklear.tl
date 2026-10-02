@@ -5,7 +5,7 @@
 
 -- @l2c_source: clib/mcu/esp32_nuklear.c
 
-local type C_NK = record
+global type C_NK = record
     l2c_nk_init: function(): integer
     l2c_nk_resize: function(integer, integer)
     l2c_nk_input: function(integer, integer, integer, integer)

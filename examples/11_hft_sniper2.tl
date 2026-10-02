@@ -1,5 +1,5 @@
 -- examples/11_hft_sniper2.tl (标准化重构版)
--- @l2c_import: std/zmq.tl
+require "std.zmq"
 
 -- 1. 定义交易所推送的二进制内存对齐结构
 local type TickPacket = record

@@ -3,9 +3,9 @@
 -- ESP32 双核物理交火测试：Core 0 (信标发生器) -> 无锁队列 -> Core 1 (GPIO 接管)
 -- ==============================================================================
 
--- @l2c_import: std/multicore.tl
--- @l2c_import: std/ringbuffer.tl
--- @l2c_import: std/esp32.tl
+require "std.multicore"
+require "std.ringbuffer"
+require "std.esp32"
 
 local GPIO_NUM_2 = 2  -- ESP32 开发板自带的蓝色 LED 引脚
 

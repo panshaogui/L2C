@@ -8,15 +8,15 @@
 
 -- @l2c_source: clib/mcu/l2c_uart.c
 
-local type C_UART = record
+global type C_UART = record
     l2c_uart_init: function()
     l2c_uart_read_char: function(): integer
 end
 
-local function UART_init()
+global function UART_init()
     C_UART.l2c_uart_init()
 end
 
-local function UART_read_char(): integer
+global function UART_read_char(): integer
     return C_UART.l2c_uart_read_char()
 end

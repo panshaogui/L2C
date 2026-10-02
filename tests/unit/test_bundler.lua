@@ -27,7 +27,7 @@ _G.print = old_print -- 恢复打印
 --  战术断言开始
 assert(code:match("local function math_add"), " VFS 导入 std/math.tl 失败！拼接正则出现退化！")
 assert(code:match("local a = 1"), " 主文件内容在拼接后丢失！")
-assert(code:match("local function L2C_Buffer"), " 核心魔法签证 <L2C_Intrinsics> 未能正确注入！")
+assert(code:match("global function L2C_Buffer"), " 核心魔法签证 <L2C_Intrinsics> 未能正确注入！")
 assert(deps.ldflags:match("-lm"), " 隐形链接库 @l2c_link 提取失败！")
 assert(deps.cincludes:match("<math.h>"), " C头文件 @l2c_include 提取失败！")
 

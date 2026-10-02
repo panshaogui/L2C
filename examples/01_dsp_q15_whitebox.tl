@@ -1,4 +1,4 @@
--- @l2c_import: std/dsp.tl
+require "std.dsp"
 
 print("==== 阶段 1：定点数 Q15 DSP 绝对数学精度验证 ====")
 

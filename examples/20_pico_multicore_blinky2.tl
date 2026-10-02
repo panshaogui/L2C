@@ -3,9 +3,9 @@
 -- RP2040 双核物理交火测试：Core 0 (发射) -> SPSC -> Core 1 (消费+打印)
 -- ==============================================================================
 
--- @l2c_import: std/pico.tl
--- @l2c_import: std/multicore.tl
--- @l2c_import: std/ringbuffer.tl
+require "std.pico"
+require "std.multicore"
+require "std.ringbuffer"
 
 local LED_PIN = 25  -- RP2040 Pico 板载绿灯
 

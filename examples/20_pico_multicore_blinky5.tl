@@ -2,9 +2,9 @@
 -- examples/20_pico_multicore_blinky5.tl (多返回值 + C_STDIO 完美打印版)
 -- ==============================================================================
 
--- @l2c_import: std/pico.tl
--- @l2c_import: std/multicore.tl
--- @l2c_import: std/ringbuffer.tl
+require "std.pico"
+require "std.multicore"
+require "std.ringbuffer"
 -- @l2c_include: stdio.h
 
 -- 引入 C 语言标准输入输出库，直接操控底层打印！

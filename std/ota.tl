@@ -4,7 +4,7 @@
 -- ==============================================================================
 
 -- @l2c_source: clib/mcu/esp32_ota.c
-local type C_OTA = record
+global type C_OTA = record
     l2c_ota_start: function(string): integer
 end
 

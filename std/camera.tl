@@ -5,7 +5,7 @@
 
 -- @l2c_source: clib/mcu/esp32_camera.c
 
-local type C_CAM = record
+global type C_CAM = record
     l2c_cam_init: function(): integer
     l2c_cam_get_frame: function(): any
     l2c_cam_get_frame_len: function(): integer 
@@ -14,6 +14,7 @@ local type C_CAM = record
     l2c_cam_init_jpeg: function(): integer
     l2c_cam_save_jpg: function(string): integer
     l2c_cam_get_pixels: function(any): any
+    l2c_cam_deinit: function()
 end
 
 global function Camera_Init(): boolean
@@ -47,4 +48,8 @@ end
 
 global function Camera_Get_Pixels(fb_ptr: any): any
     return C_CAM.l2c_cam_get_pixels(fb_ptr)
+end
+
+global function Camera_Deinit()
+    C_CAM.l2c_cam_deinit()
 end

@@ -1,5 +1,5 @@
 -- examples/08_hft_latency.tl
--- @l2c_import: std/zmq.tl
+require "std.zmq"
 
 -- 这里的 C 变量和 L2C_Buffer 都已经被物理拼接进来了，直接用！
 local ctx = C_ZMQ.zmq_ctx_new()

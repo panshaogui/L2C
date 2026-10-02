@@ -4,7 +4,7 @@
 
 -- 思想域：高频交易中的快速价格掩码组合逻辑
 -- (在硬件电路中，没有分支，所有操作都在 1 个时钟周期内极速流转)
-local function L2C_HDL_PriceMask(price: integer, threshold: integer, ctrl: integer): integer
+global function L2C_HDL_PriceMask(price: integer, threshold: integer, ctrl: integer): integer
     -- 计算价差 (硬件全加器)
     local diff = price - threshold
     

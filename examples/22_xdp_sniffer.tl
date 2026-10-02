@@ -1,10 +1,10 @@
 -- examples/22_xdp_sniffer.tl
--- @l2c_import: std/xdp.tl
+require "std.xdp"
 
 local packet_count = 0
 
 local function on_packet_received(raw_ptr: any, len: integer)
-    -- ⏱️ 计时开始：网卡数据刚落在 L2C 回调的这一纳秒！
+    -- 计时开始：网卡数据刚落在 L2C 回调的这一纳秒！
     local t0 = C_NET.l2c_rdtsc()
 
     if len < 34 then return end 
@@ -22,15 +22,15 @@ local function on_packet_received(raw_ptr: any, len: integer)
             
             local payload_len = C_NET.l2c_net_get_udp_payload_len(udp_ptr)
             
-            -- ⏱️ 计时结束：成功解开以太网、IPv4、UDP 三层伪装！
+            -- 计时结束：成功解开以太网、IPv4、UDP 三层伪装！
             local t1 = C_NET.l2c_rdtsc()
             
             packet_count = packet_count + 1
             local cycles = t1 - t0
-            print("⚡ [HFT-Bench] UDP 破译完毕! 端口:", dest_port, " | 消耗 CPU 时钟周期:", cycles)
+            print(" [HFT-Bench] UDP 破译完毕! 端口:", dest_port, " | 消耗 CPU 时钟周期:", cycles)
         end
     end
 end
 
-print("🚀 L2C AF_XDP (RDTSC 测速版) 启动！")
+print(" L2C AF_XDP (RDTSC 测速版) 启动！")
 C_XDP.xdp_start_poll("veth-rx", L2C_FuncPtr(on_packet_received))

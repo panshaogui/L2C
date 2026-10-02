@@ -1,5 +1,5 @@
--- @l2c_import: std/sdcard.tl
--- @l2c_import: std/lcd.tl
+require "std.lcd"
+require "std.sdcard"
 
 print("\n============================================")
 print("  [砖块 8] 静态 JPEG 绝对视网膜定标")

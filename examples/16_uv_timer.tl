@@ -1,5 +1,5 @@
 -- examples/16_uv_timer.tl
--- @l2c_import: std/uv.tl
+require "std.uv"
 
 -- Libuv 的回调签名必须接收一个 handle 参数！
 local function my_timer_cb(handle: any)

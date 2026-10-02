@@ -3,7 +3,7 @@
 -- ==============================================
 
 -- @l2c_include: clib/pio_helpers.h
--- @l2c_import: std/pico.tl
+require "std.pico"
 
 -- 1. 思想域：声明并编写硬件状态机 (将被 HLS 拦截，转化为 blink.pio)
 -- 注意：引号在编译时会被 HLS 引擎聪明地剥离

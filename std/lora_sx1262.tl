@@ -8,11 +8,11 @@
 
 -- @l2c_source: clib/mcu/esp32_sx1262.c
 -- @l2c_source: clib/meshtastic_engine.c
--- @l2c_import: std/eora_s3.tl
+require "std.eora_s3"
 
 -- 1. [L2C FFI 探针]：拦截 C 宇宙的底层函数！
 -- 我们利用刚刚完善的 LIR 引擎，将 any 自动降维为 void* 指针。
-local type C_ESP_IDF = record
+global type C_ESP_IDF = record
     -- 基础 GPIO 与系统延时
     gpio_set_direction: function(integer, integer)
     gpio_set_level: function(integer, integer)
@@ -52,7 +52,7 @@ local type C_ESP_IDF = record
 end
 
 -- 2. 硬件复位与唤醒引擎 (时序极其严苛)
-local function SX1262_hw_reset()
+global function SX1262_hw_reset()
     print("[SX1262] 正在执行硬件物理复位...")
     C_ESP_IDF.gpio_set_direction(EORA_BOARD.RST, GPIO_MODE_OUTPUT)
     
@@ -79,7 +79,7 @@ local function SX1262_hw_reset()
 end
 
 -- 3. 极速命令探针 (测试 SPI 通讯)
-local function SX1262_read_status()
+global function SX1262_read_status()
     -- CS 拉低，独占总线
     C_ESP_IDF.gpio_set_level(EORA_BOARD.CS, 0)
     
@@ -97,7 +97,7 @@ local function SX1262_read_status()
     
 end
 
-local function SX1262_init()
+global function SX1262_init()
     print("[SX1262] 正在初始化 SPI 射频总线...")
 
     -- CS 片选引脚初始化为高电平
@@ -137,7 +137,7 @@ end
 ---------------------------------------------------------
 
 -- 底层多参指令发送器（带硬件安全断言）
-local function SX1262_send_cmd2(cmd: integer, a1: integer): boolean
+global function SX1262_send_cmd2(cmd: integer, a1: integer): boolean
     local tx_buf = L2C_Buffer(2)
     local rx_buf = L2C_Buffer(2)
     C_ESP_IDF.l2c_set_byte(L2C_Ref(tx_buf), 0, cmd)
@@ -150,7 +150,7 @@ local function SX1262_send_cmd2(cmd: integer, a1: integer): boolean
     return st >= 0
 end
 
-local function SX1262_send_cmd5(cmd: integer, a1: integer, a2: integer, a3: integer, a4: integer): boolean
+global function SX1262_send_cmd5(cmd: integer, a1: integer, a2: integer, a3: integer, a4: integer): boolean
     local tx_buf = L2C_Buffer(5)
     local rx_buf = L2C_Buffer(5)
     C_ESP_IDF.l2c_set_byte(L2C_Ref(tx_buf), 0, cmd)
@@ -166,7 +166,7 @@ local function SX1262_send_cmd5(cmd: integer, a1: integer, a2: integer, a3: inte
     return st >= 0
 end
 
-local function SX1262_send_cmd9(cmd: integer, a1: integer, a2: integer, a3: integer, a4: integer, a5: integer, a6: integer, a7: integer, a8: integer): boolean
+global function SX1262_send_cmd9(cmd: integer, a1: integer, a2: integer, a3: integer, a4: integer, a5: integer, a6: integer, a7: integer, a8: integer): boolean
     local tx_buf = L2C_Buffer(9)
     local rx_buf = L2C_Buffer(9)
     C_ESP_IDF.l2c_set_byte(L2C_Ref(tx_buf), 0, cmd)
@@ -187,7 +187,7 @@ local function SX1262_send_cmd9(cmd: integer, a1: integer, a2: integer, a3: inte
 end
 
 -- 寄存器写入函数 (0x0D WriteRegister)
-local function SX1262_write_register(reg: integer, val: integer): boolean
+global function SX1262_write_register(reg: integer, val: integer): boolean
     local tx_buf = L2C_Buffer(4)
     local rx_buf = L2C_Buffer(4)
     C_ESP_IDF.l2c_set_byte(L2C_Ref(tx_buf), 0, 0x0D)
@@ -203,7 +203,7 @@ local function SX1262_write_register(reg: integer, val: integer): boolean
 end
 
 -- 闭环模式状态反查校验: 反查芯片 Mode 是否匹配预期
-local function SX1262_verify_chip_mode(expected_mode: integer): boolean
+global function SX1262_verify_chip_mode(expected_mode: integer): boolean
     local tx_buf = L2C_Buffer(2)
     local rx_buf = L2C_Buffer(2)
     C_ESP_IDF.l2c_set_byte(L2C_Ref(tx_buf), 0, 0xC0) -- GetStatus
@@ -221,7 +221,7 @@ local function SX1262_verify_chip_mode(expected_mode: integer): boolean
 end
 
 -- 【升级版】带重试与物理 Chip Mode 验证的重启 RX 函数
-local function SX1262_restart_rx_safe(max_retries: integer): boolean
+global function SX1262_restart_rx_safe(max_retries: integer): boolean
     local retry_cnt = max_retries or 3
     
     while retry_cnt > 0 do
@@ -254,7 +254,7 @@ local function SX1262_restart_rx_safe(max_retries: integer): boolean
 end
 
 -- 配置 CN470 与 Meshtastic LongFast 监听参数
-local function SX1262_setup_meshtastic_sniffer(): boolean
+global function SX1262_setup_meshtastic_sniffer(): boolean
     print("[SX1262] 切入 Meshtastic 窃听模式...")
 
     -- 初始化物理 BUSY 引脚拦截
@@ -336,7 +336,7 @@ local function SX1262_setup_meshtastic_sniffer(): boolean
 end
 
 -- 切入连续监听模式
-local function SX1262_setup_rx()
+global function SX1262_setup_rx()
     print("[SX1262] 正在设置全频段雷达中断矩阵...")
     local buf_irq = L2C_Buffer(9)
     local p_irq = L2C_Ref(buf_irq)
@@ -374,7 +374,7 @@ end
 -- 轮询 DIO1 中断并提取报文 (纯物理层探针)
 -- @param payload_buf: 外层传入的 StackString 缓冲区，用于零拷贝提取报文
 -- 返回 boolean (是否触发), high, low。绝对不要在这里碰屏幕 (OLED 阻塞 = 丢包)！
-local function SX1262_poll_rx(payload_buf: any): boolean, integer, integer
+global function SX1262_poll_rx(payload_buf: any): boolean, integer, integer
     if C_ESP_IDF.gpio_get_level(EORA_BOARD.DIO1) == 1 then
         
         -- 1. 获取引发中断的真实原因 (0x12 GetIrqStatus)

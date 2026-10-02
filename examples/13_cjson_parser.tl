@@ -1,5 +1,5 @@
 -- examples/13_cjson_parser.tl
--- @l2c_import: std/cjson.tl
+require "std.cjson"
 
 print(" L2C 0-GC JSON 解析引擎启动...")
 
