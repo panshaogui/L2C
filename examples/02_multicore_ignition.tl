@@ -1,4 +1,4 @@
--- @l2c_import: std/multicore.tl
+require "std.multicore"
 -- @l2c_include: unistd.h
 
 local type C_LIBC = record

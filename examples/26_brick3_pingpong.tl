@@ -1,5 +1,5 @@
--- @l2c_import: std/eora_s3.tl
--- @l2c_import: std/lora_sx1262.tl
+require "std.lora_sx1262"
+require "std.stackstring"
 
 -- 第三层砖测试：CW 连续波发射（物理 RF 通路测试）
 print("\n============================================")

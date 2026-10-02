@@ -3,13 +3,14 @@ local decl = require("codegen.declaration")
 
 print(" [UNIT] 测试 declaration.lua (声明与宏) ...")
 
-local mock_self = {
+-- 【核心修复：注入元表 __index，让假字典顺着原型链找到内部方法！】
+local mock_self = setmetatable({
     indent_level = 0,
     indent = function(self) return string.rep("  ", self.indent_level) end,
     gen = function(self, node) return node.mock_val or "mock" end,
     record_registry = {},
     ffi_typeids = {}
-}
+}, { __index = decl })
 
 -- 1. 测试普通局部变量声明
 local local_node = { vars = { { tk = "x" } }, exps = { mock_val = "10" } }

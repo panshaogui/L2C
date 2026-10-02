@@ -86,7 +86,7 @@ static inline int l2c_str_parse_hex(void* ptr, int offset) {
 }
 
 // 0-GC 极速拷贝，严守最大容量防线
-static inline void l2c_str_copy(void* dst, void* src, int max_len) {
+void l2c_str_copy(void* dst, void* src, int max_len) {
     if (!dst || !src) return;
     uint8_t* d = (uint8_t*)dst;
     uint8_t* s = (uint8_t*)src;

@@ -1,7 +1,7 @@
 -- 独立视觉与神经沙盒
--- @l2c_import: std/camera.tl
--- @l2c_import: std/touch.tl
--- @l2c_import: std/lcd.tl
+require "std.lcd"
+require "std.touch"
+require "std.camera"
 
 print("\n============================================")
 print("  L2C 视觉中枢与神经感知 独立系统启动！")

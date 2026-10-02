@@ -1,5 +1,5 @@
 -- examples/15_nn_sub.tl
--- @l2c_import: std/nanomsg.tl
+require "std.nanomsg"
 
 local type MarketTick = record
     price: integer

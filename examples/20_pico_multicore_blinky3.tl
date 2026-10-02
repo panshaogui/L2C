@@ -2,9 +2,9 @@
 -- examples/20_pico_multicore_blinky3.tl (多返回值解包终极版)
 -- ==============================================================================
 
--- @l2c_import: std/pico.tl
--- @l2c_import: std/multicore.tl
--- @l2c_import: std/ringbuffer.tl
+require "std.pico"
+require "std.multicore"
+require "std.ringbuffer"
 
 local LED_PIN = 25  -- 如果是 Pico W 请外接引脚，老款为 25
 

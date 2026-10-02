@@ -96,7 +96,7 @@ function M.generate(d_file_path)
     -- ==========================================
     local home = os.getenv("HOME")
     if home then
-        local ext_dir = home .. "/.vscode/extensions/l2c-hover-hack-0.0.1"
+        local ext_dir = home .. "/.vscode/extensions/l2c-hover-hack-0.0.2"
         os.execute("mkdir -p " .. ext_dir)
 
         local pkg_json = io.open(ext_dir .. "/package.json", "w")
@@ -105,7 +105,7 @@ function M.generate(d_file_path)
                 {
                 "name": "l2c-hover-hack",
                 "displayName": "L2C Hover Hack",
-                "version": "0.0.1",
+                "version": "0.0.2",
                 "publisher": "l2c-engine",
                 "engines": { "vscode": "^1.60.0" },
                 "activationEvents": [ "*" ],

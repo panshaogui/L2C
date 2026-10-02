@@ -23,38 +23,41 @@ function M.bundle(input_file)
 
     local l2c_core_headers = [[ 
         -- L2C Core Intrinsics
-        local function L2C_Buffer(size: integer): any end
-        local function L2C_NumberArray(size: integer): {number} end
-        local function L2C_IntegerArray(size: integer): {integer} end
+        global function L2C_Buffer(size: integer): any end
+        global function L2C_NumberArray(size: integer): {number} end
+        global function L2C_IntegerArray(size: integer): {integer} end
+
         -- 核心签证：挂载结构体连续数组魔法！
-        local function L2C_RecordArray(tname: string, size: integer): any end
-        local function L2C_Ref(var: any): any end
-        local function L2C_Cast(ptr: any, tname: string): any end
-        local function L2C_FuncPtr(func: any): any end
-        local function L2C_NewPointer(): any end
-        local function L2C_Tick_Reset() end
-        local function L2C_Static(type_name: any): any end
-        local function L2C_Spinlock_Lock(lock_id: integer) end
-        local function L2C_Spinlock_Unlock(lock_id: integer) end
-        local function L2C_Memory_Barrier() end
-        local function L2C_PtrAsInt(ptr: any): integer end
-        local function L2C_NumberToInt(n: number): integer end
-        local function L2C_ReadArray(arr_ptr: integer, idx: integer): integer end
-        local function L2C_WriteArray(arr_ptr: integer, idx: integer, val: integer) end
+        global function L2C_RecordArray(tname: string, size: integer): any end
+        global function L2C_Ref(var: any): any end
+        global function L2C_Cast(ptr: any, tname: string): any end
+        global function L2C_FuncPtr(func: any): any end
+        global function L2C_NewPointer(): any end
+        global function L2C_Tick_Reset() end
+        global function L2C_Static(type_name: any): any end
+        global function L2C_Spinlock_Lock(lock_id: integer) end
+        global function L2C_Spinlock_Unlock(lock_id: integer) end
+        global function L2C_Memory_Barrier() end
+        global function L2C_PtrAsInt(ptr: any): integer end
+        global function L2C_NumberToInt(n: number): integer end
+        global function L2C_ReadArray(arr_ptr: integer, idx: integer): integer end
+        global function L2C_WriteArray(arr_ptr: integer, idx: integer, val: integer) end
+
         -- [L2C HLS RTL Intrinsics 硬件寄存器签证]
-        local function HDL_Reg(init_val: integer): integer end
+        global function HDL_Reg(init_val: integer): integer end
+
         -- [L2C HLS PIO Intrinsics 硬件状态机魔法签证]
-        local function set(a: any, b?: any) end
-        local function jmp(a: any, b?: any) end
-        local function wait(a: any, b?: any, c?: any) end
-        local function in_(a: any, b?: any) end
-        local function out(a: any, b?: any) end
-        local function push(a?: any, b?: any) end
-        local function pull(a?: any, b?: any) end
-        local function mov(a: any, b?: any) end
-        local function irq(a: any, b?: any) end
-        local function wrap_target() end
-        local function wrap() end
+        global function set(a: any, b?: any) end
+        global function jmp(a: any, b?: any) end
+        global function wait(a: any, b?: any, c?: any) end
+        global function in_(a: any, b?: any) end
+        global function out(a: any, b?: any) end
+        global function push(a?: any, b?: any) end
+        global function pull(a?: any, b?: any) end
+        global function mov(a: any, b?: any) end
+        global function irq(a: any, b?: any) end
+        global function wrap_target() end
+        global function wrap() end
         
     ]]
 
@@ -93,6 +96,16 @@ function M.bundle(input_file)
                 -- Do nothing (相当于跳过)
             else
                 local import_file = line:match("%-%-%s*@l2c_import:%s*([%w_%.%-%/]+)")
+
+                -- 拦截所有标准的 require "xxx" 或 require("xxx")
+                if not import_file then
+                    local req_module = line:match("require%s*%(?%s*['\"]([%w_%.%-%/]+)['\"]%s*%)?")
+                    if req_module then
+                        -- 将 Lua 规范的点号包路径 (如 std.lcd) 物理坍缩为本地文件系统路径 (std/lcd.tl)
+                        import_file = req_module:gsub("%.", "/") .. ".tl"
+                    end
+                end
+                
                 if import_file then
                     add_line("-- IMPORT START: " .. import_file .. " --", file_path, orig_line)
                     read_and_bundle(import_file)

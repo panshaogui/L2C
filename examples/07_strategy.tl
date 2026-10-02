@@ -1,5 +1,5 @@
--- @l2c_import: std/zmq.tl
--- @l2c_import: std/cjson.tl
+require "std.zmq"
+require "std.cjson"
 
 print(" L2C 高频网关启动 (ZMQ + 0-GC JSON解析)...")
 

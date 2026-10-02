@@ -1,4 +1,4 @@
--- @l2c_import: std/lcd.tl
+require "std.lcd"
 
 local type C_OS = record
     vTaskDelay: function(integer)

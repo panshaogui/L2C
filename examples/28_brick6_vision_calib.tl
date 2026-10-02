@@ -1,7 +1,7 @@
 -- examples/28_brick6_vision_calib.tl
--- @l2c_import: std/camera.tl
--- @l2c_import: std/touch.tl
--- @l2c_import: std/lcd.tl
+require "std.lcd"
+require "std.touch"
+require "std.camera"
 
 local type C_OS = record
     vTaskDelay: function(integer)

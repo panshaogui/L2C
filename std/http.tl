@@ -10,7 +10,7 @@
 -- @l2c_source: clib/http_fetcher.c
 -- @l2c_include: clib/http_fetcher.h
 
-local type C_HTTP = record
+global type C_HTTP = record
     http_get: function(string, any, integer): integer
 end
 

@@ -1,7 +1,7 @@
 -- examples/21_esp32_blinky.tl
--- @l2c_import: std/esp32.tl
+require "std.esp32"
 
-print("🚀 L2C ESP32 核心已苏醒！准备接管 WROOM-32 物理引脚...")
+print(" L2C ESP32 核心已苏醒！准备接管 WROOM-32 物理引脚...")
 
 -- 初始化 GPIO 2 (WROOM-32 板载蓝灯)
 local LED_PIN = 2

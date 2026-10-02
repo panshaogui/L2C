@@ -1,5 +1,5 @@
 -- examples/19_pico_blinky.tl
--- @l2c_import: std/pico.tl
+require "std.pico"
 
 -- 1. 🔥【Pico 救命第一行】必须初始化 Pico 标准库（硬件 UART / USB 以及外设时钟）
 C_PICO.stdio_init_all()

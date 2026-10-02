@@ -9,30 +9,30 @@
 -- [补齐契约]：引入咱们的本地 C 语言头文件，补齐函数签名！
 -- @l2c_include: clib/simdjson_wrapper.h
 
-local type simd_ptr = record end
+global type simd_ptr = record end
 
-local type C_SIMD_TYPE = record
+global type C_SIMD_TYPE = record
     simdjson_c_parse: function(string, integer): simd_ptr
     simdjson_c_get_number: function(simd_ptr, string): number
     simdjson_c_free: function(simd_ptr)
 end
 
-local C_SIMD: C_SIMD_TYPE
+global C_SIMD: C_SIMD_TYPE
 
 -- ==============================================================================
 -- L2C 极简封装：AVX-512 硬件加速 JSON 解析
 -- ==============================================================================
 
-local function SIMDJSON_Parse(json_str: string): simd_ptr
+global function SIMDJSON_Parse(json_str: string): simd_ptr
     -- 核心优雅：在底层自动计算字符串长度，无需用户干预
     return C_SIMD.simdjson_c_parse(json_str, #json_str)
 end
 
-local function SIMDJSON_GetNumber(obj: simd_ptr, key: string): number
+global function SIMDJSON_GetNumber(obj: simd_ptr, key: string): number
     return C_SIMD.simdjson_c_get_number(obj, key)
 end
 
-local function SIMDJSON_Free(obj: simd_ptr)
+global function SIMDJSON_Free(obj: simd_ptr)
     if obj ~= nil then 
         C_SIMD.simdjson_c_free(obj) 
     end

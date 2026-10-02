@@ -4,8 +4,8 @@
 -- 核心技术：Bit-Packing 订单压缩、SPSC 无锁投递、0-GC 物理内存撮合
 -- ==============================================================================
 
--- @l2c_import: std/multicore.tl
--- @l2c_import: std/ringbuffer.tl
+require "std.multicore"
+require "std.ringbuffer"
 -- @l2c_include: sched.h
 
 local type C_LIBC = record

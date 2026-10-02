@@ -7,15 +7,15 @@
 -- L2C 0-GC 蓝牙透传控制台 (NimBLE NUS)
 -- @l2c_source: clib/mcu/esp32_ble.c
 
-local type C_BLE = record
+global type C_BLE = record
     l2c_ble_init: function()
     l2c_ble_pop_char: function(): integer
 end
 
-local function BLE_init()
+global function BLE_init()
     C_BLE.l2c_ble_init()
 end
 
-local function BLE_pop_char(): integer
+global function BLE_pop_char(): integer
     return C_BLE.l2c_ble_pop_char()
 end

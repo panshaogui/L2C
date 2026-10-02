@@ -40,9 +40,9 @@ local function lower_type(type_node)
 end
 
 -- 映射 1：Teal Record -> Nelua @record (带有类型感知的防御性注册表 + C FFI 探针)
-function M:gen_local_type(node)
+-- 【核心重构】：内部通用类型生成器，支持 local 和 global 动态注入！
+function M:_gen_type_internal(node, scope_kwd)
     --  [核心修复]：不要盲目信任 node.tk！
-    -- 如果 node.name 存在，说明它是个正规的类型定义节点（如 local type xxx = record），优先从 name 里榨取真名
     local name = node.tk
     if node.name and node.name.tk then
         name = node.name.tk
@@ -65,11 +65,10 @@ function M:gen_local_type(node)
     
     local def = get_real_def(node)
 
-    --  [FFI 闭环]：精准捕获特殊命名空间 C 或 C_xxx，物理将 Teal 的声明转换为 Nelua FFI 绑定！
+    --  [FFI 闭环]：精准捕获特殊命名空间 C 或 C_xxx
     if name == "C" or name:match("^C_") then
         local def = node.value and node.value.newtype and node.value.newtype.def
         if def and def.typeid then
-            --  [防御性初始化白皮书]：如果还不存在就就地创建，绝对不触动老哥你原本的任何 registry
             self.ffi_typeids = self.ffi_typeids or {}
             self.ffi_typeids[def.typeid] = true
         end
@@ -83,23 +82,20 @@ function M:gen_local_type(node)
                 local args_out = {}
                 if func_info.args and func_info.args.tuple then
                     for i, arg in ipairs(func_info.args.tuple) do
-                        -- [统一降维引擎]
                         local t_name = lower_type(arg)
-                        
                         table.insert(args_out, string.format("arg%d: %s", i, t_name))
                     end
                 end
                 
                 local ret_type = "void"
                 if func_info.rets and func_info.rets.tuple and func_info.rets.tuple[1] then
-                    -- [统一降维引擎]
                     ret_type = lower_type(func_info.rets.tuple[1])
                 end
                 
-                -- [核心架构统一]：生成绝对扁平的 C 函数映射！完美对接 expression.lua 中的裸调用！
-                -- 示例生成：local function gpio_put(arg1: integer, arg2: integer): void <cimport('gpio_put'), nodecl> end
+                -- 【动态 Scope 注入】生成 local function 或 global function
                 local c_decl = string.format(
-                    "local function %s(%s): %s <cimport('%s'), nodecl> end", 
+                    "%s function %s(%s): %s <cimport('%s'), nodecl> end", 
+                    scope_kwd,
                     func_name, 
                     table.concat(args_out, ", "), 
                     ret_type,
@@ -107,11 +103,11 @@ function M:gen_local_type(node)
                 )
                 table.insert(out, c_decl)
             elseif func_info then
-                -- [HLS FFI 补丁]：支持 C 全局变量 / 结构体实例的降维绑定！
+                -- 【动态 Scope 注入】全局变量/结构体实例绑定
                 local v_type = lower_type(func_info)
-                
                 local c_decl = string.format(
-                    "local %s: %s <cimport('%s'), nodecl>", 
+                    "%s %s: %s <cimport('%s'), nodecl>", 
+                    scope_kwd,
                     func_name, 
                     v_type, 
                     func_name
@@ -126,13 +122,13 @@ function M:gen_local_type(node)
     -- 终极真理解法：遍历 enumset 哈希表提取 Enum
     if def.typename == "enum" then
         local out = {}
-        table.insert(out, string.format("local %s = @enum {", name))
+        -- 【动态 Scope 注入】
+        table.insert(out, string.format("%s %s = @enum {", scope_kwd, name))
         self.indent_level = self.indent_level + 1
         
         self.enum_registry = self.enum_registry or {}
         local val_idx = 0
         
-        -- [致命漏洞修复：强制对提取出的 key 进行字典序排序，保证 HFT ABI 的绝对确定性！]
         if def.enumset then
             local keys = {}
             for enum_key, _ in pairs(def.enumset) do
@@ -144,7 +140,6 @@ function M:gen_local_type(node)
             
             for _, enum_key in ipairs(keys) do
                 table.insert(out, self:indent() .. string.format("%s = %d,", enum_key, val_idx))
-                -- 写入注册表，供 literal.lua 拦截
                 self.enum_registry[enum_key] = name
                 val_idx = val_idx + 1
             end
@@ -155,37 +150,29 @@ function M:gen_local_type(node)
         return table.concat(out, "\n")
     end
 
-    -- [核心修复：移除此处强行覆盖的 def 变量，防止 AST 类型剥离失效]
     if not def or def.typename ~= "record" then return "" end
     self.record_registry = self.record_registry or {}
     
-    --  [升级]：不仅保存字段名，还保存类型，用于后续的安全兜底初始化
     local fields_info = {}
     for _, field_name in ipairs(def.field_order or {}) do
-        --  [精确对齐]：在这里同时拦截 _new 和所有类型为 "function" 的方法字段，彻底闭环
         local f_node = def.fields[field_name]
         if field_name ~= "_new" and f_node and f_node.typename ~= "function" then
-            -- [统一降维引擎]
             local t_name = lower_type(f_node)
-
-            table.insert(fields_info, { 
-                name = field_name, type = t_name 
-            })
+            table.insert(fields_info, { name = field_name, type = t_name })
         end
     end
     self.record_registry[name] = fields_info
     
     local out = {}
     if #fields_info == 0 then
-        --  [FFI 物理降维]：如果发现这是一个空 Record，说明它是 C 语言的不透明指针占位符。
-        -- 直接将其映射为底层 C 的 void* (Nelua 叫 @pointer)
-        table.insert(out, string.format("local %s = @pointer", name))
+        -- 【动态 Scope 注入】不透明指针
+        table.insert(out, string.format("%s %s = @pointer", scope_kwd, name))
     else
-        -- 确保 <packed> 放在 Nelua 要求的正确位置
+        -- 【动态 Scope 注入】标准 Record
         if name:match("^Packed_") then
-            table.insert(out, string.format("local %s: type <packed> = @record {", name))
+            table.insert(out, string.format("%s %s: type <packed> = @record {", scope_kwd, name))
         else
-            table.insert(out, string.format("local %s = @record {", name))
+            table.insert(out, string.format("%s %s = @record {", scope_kwd, name))
         end
         
         self.indent_level = self.indent_level + 1
@@ -199,7 +186,21 @@ function M:gen_local_type(node)
     return table.concat(out, "\n")
 end
 
-function M:gen_local_declaration(node)
+-- ==========================================
+-- 暴露出 Local 与 Global 两把双子星探针！
+-- ==========================================
+function M:gen_local_type(node)
+    return self:_gen_type_internal(node, "local")
+end
+
+function M:gen_global_type(node)
+    return self:_gen_type_internal(node, "global")
+end
+
+-- ==========================================
+-- 内部通用变量声明引擎 (支持 local 和 global)
+-- ==========================================
+function M:_gen_var_declaration_internal(node, scope_kwd)
     local vars_list = {}
     
     -- 核心修复：遍历所有变量，智能提取变量名，彻底免疫带有类型的 nil 陷阱！
@@ -228,13 +229,23 @@ function M:gen_local_declaration(node)
         return "-- L2C: Stripped Teal _tl_compat polyfill"
     end
     
-    -- 完美支持多变量拼接 (local a, b = foo())
+    -- 完美支持多变量拼接并动态注入作用域 (local a, b = foo() 或 global a = 1)
     if not exps_str or exps_str == "" then
-        return string.format("local %s", vars_str)
+        return string.format("%s %s", scope_kwd, vars_str)
     else
-        return string.format("local %s = %s", vars_str, exps_str)
+        return string.format("%s %s = %s", scope_kwd, vars_str, exps_str)
     end
 end
+
+-- 暴露出 Local 与 Global 两把变量探针！
+function M:gen_local_declaration(node)
+    return self:_gen_var_declaration_internal(node, "local")
+end
+
+function M:gen_global_declaration(node)
+    return self:_gen_var_declaration_internal(node, "global")
+end
+
 
 -- 映射 2：函数声明（修复 UNKNOWN bug）
 function M:gen_local_function(node)

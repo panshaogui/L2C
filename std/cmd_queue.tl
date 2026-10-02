@@ -6,18 +6,18 @@
 -- std/cmd_queue.tl
 -- L2C 0-GC 跨核无锁命令队列 (SPSC RingBuffer)
 
-local type C_SPSC = record
+global type C_SPSC = record
     l2c_spsc_read_arr: function(integer, integer): integer
     l2c_spsc_write_arr: function(integer, integer, integer)
     l2c_memory_barrier: function()
 end
 
 -- 强制封装为 Getter 函数，确保 Core 0 和 Core 1 拿到的是全宇宙同一块物理静态内存！
-local function Get_CmdQueue(): any return L2C_Static("[256]integer") end
-local function Get_CmdHead(): any return L2C_Static("integer") end
-local function Get_CmdTail(): any return L2C_Static("integer") end
+global function Get_CmdQueue(): any return L2C_Static("[256]integer") end
+global function Get_CmdHead(): any return L2C_Static("integer") end
+global function Get_CmdTail(): any return L2C_Static("integer") end
 
-local function CMD_Push(val: integer)
+global function CMD_Push(val: integer)
     local q = L2C_PtrAsInt(Get_CmdQueue())
     local head_ptr = L2C_PtrAsInt(Get_CmdHead())
     local head = C_SPSC.l2c_spsc_read_arr(head_ptr, 0)
@@ -29,7 +29,7 @@ local function CMD_Push(val: integer)
     C_SPSC.l2c_spsc_write_arr(head_ptr, 0, next_head)
 end
 
-local function CMD_Pop(): boolean, integer
+global function CMD_Pop(): boolean, integer
     local q = L2C_PtrAsInt(Get_CmdQueue())
     local head_ptr = L2C_PtrAsInt(Get_CmdHead())
     local tail_ptr = L2C_PtrAsInt(Get_CmdTail())

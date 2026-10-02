@@ -1,5 +1,5 @@
--- @l2c_import: std/lcd.tl
--- @l2c_import: std/touch.tl
+require "std.lcd"
+require "std.touch"
 
 local type C_OS = record
     vTaskDelay: function(integer)

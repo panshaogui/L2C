@@ -1,5 +1,4 @@
--- @l2c_import: std/eora_s3.tl
--- @l2c_import: std/lora_sx1262.tl
+require "std.lora_sx1262"
 
 -- 第一层砖测试：读取 GetStatus (0xC0)
 local function test_brick_1_get_status(): boolean

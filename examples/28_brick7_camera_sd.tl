@@ -1,5 +1,5 @@
--- @l2c_import: std/sdcard.tl
--- @l2c_import: std/camera.tl
+require "std.camera"
+require "std.sdcard"
 
 local type C_OS = record
     vTaskDelay: function(integer)

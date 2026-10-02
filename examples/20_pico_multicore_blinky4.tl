@@ -2,9 +2,9 @@
 -- examples/24_pico_multicore_blinky4.tl (多核保护装甲版)
 -- ==============================================================================
 
--- @l2c_import: std/pico.tl
--- @l2c_import: std/multicore.tl
--- @l2c_import: std/ringbuffer.tl
+require "std.pico"
+require "std.multicore"
+require "std.ringbuffer"
 
 local LED_PIN = 25
 

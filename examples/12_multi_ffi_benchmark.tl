@@ -1,7 +1,7 @@
 -- examples/12_multi_ffi_benchmark.tl
--- 📦 极限压力测试：双重 C 原生标准库物理合并
--- @l2c_import: std/zmq.tl
--- @l2c_import: std/time.tl
+-- 极限压力测试：双重 C 原生标准库物理合并
+require "std.zmq"
+require "std.time"
 
 -- 1. 验证 C_TIME 命名空间
 local function get_current_ns(): integer
@@ -19,10 +19,10 @@ local subscriber = C_ZMQ.zmq_socket(ctx, 2)
 local rc = C_ZMQ.zmq_connect(subscriber, "tcp://127.0.0.1:5555")
 
 if rc == 0 then
-    print("📡 ZMQ 物理网关挂载成功！")
+    print(" ZMQ 物理网关挂载成功！")
 end
 
 -- 3. 混合执行
 local t_start = get_current_ns()
-print("⏱️ 系统内核时钟测距完成！伪纳秒戳:", t_start)
-print("✅ [大满贯] ZMQ(C++) 与 Time(C) 库在底层完美共存，命名空间未发生碰撞！")
+print(" 系统内核时钟测距完成！伪纳秒戳:", t_start)
+print(" [大满贯] ZMQ(C++) 与 Time(C) 库在底层完美共存，命名空间未发生碰撞！")

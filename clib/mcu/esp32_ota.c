@@ -34,6 +34,13 @@ static void l2c_ota_task(void *pvParameter) {
     esp_ota_handle_t update_handle = 0;
     // 获取后台那个空闲的备用分区 (ota_0 或 ota_1)
     const esp_partition_t *update_part = esp_ota_get_next_update_partition(NULL);
+
+    // 【核心修复：绝对空指针防御！】
+    if (update_part == NULL) {
+        printf(" [OTA-ERR] 致命错误：物理 Flash 中未找到 ota_0/ota_1 分区！请检查分区表！\n");
+        goto clean;
+    }
+
     printf(">> 正在擦除备用物理分区: %s ...\n", update_part->label);
     
     if (esp_ota_begin(update_part, OTA_WITH_SEQUENTIAL_WRITES, &update_handle) != ESP_OK) {
@@ -81,8 +88,23 @@ clean:
 
 // 供 Teal 调用的探针
 int l2c_ota_start(const char* url) {
+    printf("\n>> [C 底层] 接收到 OTA 物理指针，准备拉起独立下载线程...\n");
+    
     char* url_copy = strdup(url); 
-    // 开辟独立的 FreeRTOS 线程去拉取，绝对不卡死 UI 和射频中断！
-    xTaskCreate(&l2c_ota_task, "ota_task", 8192, url_copy, 5, NULL);
+    if (url_copy == NULL) {
+        printf(" [OTA-ERR] 堆内存不足，无法复制 URL！\n");
+        return 0;
+    }
+    
+    // 开辟独立的 FreeRTOS 线程
+    BaseType_t res = xTaskCreate(&l2c_ota_task, "ota_task", 4096, url_copy, 5, NULL);
+    
+    if (res != pdPASS) {
+        printf(" [OTA-ERR] 致命错误：无法创建 OTA 线程 (可能内存碎片化)！\n");
+        free(url_copy);
+        return 0;
+    }
+    
+    printf(">> [C 底层] OTA 线程拉起成功！\n");
     return 1;
 }

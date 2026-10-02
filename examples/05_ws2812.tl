@@ -2,7 +2,7 @@
 -- 05_ws2812.tl: L2C PIO HLS 点亮幻彩灯带 (Wokwi 靶场版)
 -- ==============================================
 
--- @l2c_import: std/pico.tl
+require "std.pico"
 -- @l2c_include: clib/ws2812_helpers.h
 
 -- 1. 思想域：降维级 WS2812 时序逻辑 (完美 11-Cycle 架构)

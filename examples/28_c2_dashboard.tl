@@ -1,19 +1,19 @@
--- @l2c_import: std/esp32.tl
--- @l2c_import: std/lcd.tl
--- @l2c_import: std/touch.tl
--- @l2c_import: std/camera.tl
--- @l2c_import: std/nuklear.tl
--- @l2c_import: std/nvs.tl
--- @l2c_import: std/sdcard.tl
--- @l2c_import: std/ble_nus.tl
--- @l2c_import: std/uart.tl 
--- @l2c_import: std/wifi.tl
--- @l2c_import: std/ntp.tl
--- @l2c_import: std/udp.tl
--- @l2c_import: std/ota.tl
--- @l2c_import: std/stackstring.tl
--- @l2c_import: std/multicore.tl
--- @l2c_import: std/c2_engine.tl
+require "std.esp32"
+require "std.lcd"
+require "std.touch"
+require "std.camera"
+require "std.nuklear"
+require "std.nvs"
+require "std.sdcard"
+require "std.ble_nus"
+require "std.uart" 
+require "std.wifi"
+require "std.ntp"
+require "std.udp"
+require "std.ota"
+require "std.stackstring"
+require "std.multicore"
+require "std.c2_engine"
 
 local type C_OS = record vTaskDelay: function(integer) end
 
@@ -53,7 +53,7 @@ print(" [BLE] 蓝牙配置通道已开启，设备名: L2C-Mesh")
 -- ==========================================================
 local w_ssid_buf = L2C_Buffer(64); local w_ssid_str = L2C_Ref(w_ssid_buf); StackStr_init(w_ssid_str)
 local w_pwd_buf  = L2C_Buffer(64); local w_pwd_str  = L2C_Ref(w_pwd_buf);  StackStr_init(w_pwd_str)
-local was_connected = false
+local is_services_started = false
 local ip_buf = L2C_Buffer(32); local ip_str = L2C_Ref(ip_buf); StackStr_init(ip_str)
 
 if C_NVS.l2c_nvs_get_stackstr("w_ssid", w_ssid_str, 64) == 1 and 
@@ -132,7 +132,20 @@ local function Process_Local_Config_Cmd(cmd_str: any)
             StackStr_append_char(url_str, 128, C_ESP_IDF.l2c_get_byte(cmd_str, 1 + i))
         end
         print(">> [COMMAND] 收到最高空中指令，准备拉取固件: ", StackStr_get(url_str))
+        
+        --【核心战术：执行焦土政策，剥夺外设权限！】
+        print(">> [LOCKDOWN] 正在执行焦土政策，剥夺物理器官以回收 SRAM...")
+        if has_cam then
+            Camera_Deinit()
+            has_cam = false -- 彻底切断 UI 渲染流
+            print(">> [LOCKDOWN] 摄像头 DMA 缓冲已被强行撕裂释放！")
+        end
+        
+        -- 挂起 100ms，让 FreeRTOS 的 Idle 线程有时间完成内部 RAM 的碎片回收拼接！
+        C_OS.vTaskDelay(10) 
+        
         -- 呼叫 OTA 线程
+        print(">> [SYSTEM] 内存回收完毕，启动拉取！")
         OTA_Start(StackStr_get(url_str))
     end
 end
@@ -159,8 +172,13 @@ local function Core1_CommsTask()
         if is_conn and not was_conn then
             was_conn = true
             WIFI_Disable_PowerSave() -- 拒绝休眠，1ms 级极速响应！
-            UDP_server_init(8888)    -- 监听僚机战报
-            NTP_init()               -- 同步绝对时间
+
+            if not is_services_started then
+                UDP_server_init(8888)    
+                NTP_init()               
+                is_services_started = true
+            end
+
             print(" [Core 1] 战术雷达 8888 端口与 NTP 时间引擎已点火！")
         elseif not is_conn and was_conn then
             was_conn = false

@@ -7,12 +7,12 @@
 -- L2C 极简标准库：SPSC 无锁环形队列 (强制指针引用版)
 -- ==============================================================================
 
-local type C_SPSC = record
+global type C_SPSC = record
     l2c_spsc_read_arr: function(integer, integer): integer
     l2c_spsc_write_arr: function(integer, integer, integer)
 end
 
-local type SPSC_Queue = record
+global type SPSC_Queue = record
     head: integer
     tail: integer
     mask: integer
@@ -20,14 +20,15 @@ local type SPSC_Queue = record
     _cast: function(any): SPSC_Queue
 end
 
-local type IntBox = record
+--- **【装箱指针】** 强类型的物理整数盒子，用于替代数组进行 C 语言 Out-Parameter 指针传出。
+global type IntBox = record
     val: integer
     _new: function(): IntBox
     _cast: function(any): IntBox
 end
 
 --  参数强制改为 any (void*)，彻底杜绝 C 语言的按值拷贝！
-local function SPSC_Init(q_ptr: any, power_of_2_size: integer, ptr_as_int: integer)
+global function SPSC_Init(q_ptr: any, power_of_2_size: integer, ptr_as_int: integer)
     -- 原地强转为物理指针进行写入
     local q = SPSC_Queue._cast(q_ptr)
     q.head = 0
@@ -37,7 +38,7 @@ local function SPSC_Init(q_ptr: any, power_of_2_size: integer, ptr_as_int: integ
     L2C_Memory_Barrier()
 end
 
-local function SPSC_Push(q_ptr: any, val: integer): boolean
+global function SPSC_Push(q_ptr: any, val: integer): boolean
     local q = SPSC_Queue._cast(q_ptr)
     L2C_Memory_Barrier() 
     local next_head = (q.head + 1) & q.mask
@@ -49,7 +50,7 @@ local function SPSC_Push(q_ptr: any, val: integer): boolean
     return true
 end
 
-local function SPSC_Pop(q_ptr: any, out_box_ptr: any): boolean
+global function SPSC_Pop(q_ptr: any, out_box_ptr: any): boolean
     local q = SPSC_Queue._cast(q_ptr)
     local out_box = IntBox._cast(out_box_ptr)
     L2C_Memory_Barrier() 
@@ -61,7 +62,7 @@ local function SPSC_Pop(q_ptr: any, out_box_ptr: any): boolean
     return true
 end
 
-local function Get_SharedQueue(): SPSC_Queue
+global function Get_SharedQueue(): SPSC_Queue
     return SPSC_Queue._cast(L2C_Static("SPSC_Queue"))
 end
 

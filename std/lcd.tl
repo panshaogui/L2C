@@ -5,7 +5,7 @@
 
 -- @l2c_source: clib/mcu/esp32_lcd.c
 
-local type C_LCD = record
+global type C_LCD = record
     l2c_lcd_init: function(): integer
     l2c_spi_bus_init: function(integer, integer, integer, integer): integer
     -- l2c_lcd_draw_frame: function(any, integer, integer)

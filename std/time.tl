@@ -6,7 +6,7 @@
 -- std/time.tl
 -- @l2c_include: time.h
 
-local type timespec_t = record
+global type timespec_t = record
     tv_sec: integer
     tv_nsec: integer
     -- 补上魔法签证，允许将底层栈内存强转为 timespec
@@ -14,7 +14,7 @@ local type timespec_t = record
 end
 
 -- 声明底层 C 原生命名空间
-local type C_TIME_TYPE = record
+global type C_TIME_TYPE = record
     clock_gettime: function(integer, any): integer
     
     -- 神级 C FFI：直接把 C 语言头文件里的宏常量作为变量引入！
@@ -24,14 +24,14 @@ local type C_TIME_TYPE = record
     CLOCK_REALTIME: integer
 end
 
-local C_TIME: C_TIME_TYPE
+global C_TIME: C_TIME_TYPE
 
 -- ==============================================================================
 -- L2C 极简封装：纳秒级高精度物理时钟
 -- ==============================================================================
 
 -- 获取单调递增的纳秒时间戳 (免疫 NTP 授时跳变，专为 Benchmark 测距打造)
-local function time_now_ns(): integer
+global function time_now_ns(): integer
     -- 在 C 函数栈上瞬间开辟 16 字节
     local ts_buf = L2C_Buffer(16) 
     

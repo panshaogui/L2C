@@ -63,6 +63,27 @@ global L2C_PtrAsInt: function(ptr: any): integer
 --- @param n 浮点数。
 global L2C_NumberToInt: function(n: number): integer
 
+global L2C_ReadArray: function(arr_ptr: integer, idx: integer): integer
+global L2C_WriteArray: function(arr_ptr: integer, idx: integer, val: integer)
+
+global L2C_RecordArray: function(tname: string, size: integer): any
+
+-- [L2C HLS RTL Intrinsics 硬件寄存器签证]
+global HDL_Reg: function(init_val: integer): integer
+
+--- **【HLS PIO】** 硬件状态机汇编签证
+global set: function(a: any, b?: any)
+global jmp: function(a: any, b?: any)
+global wait: function(a: any, b?: any, c?: any)
+global in_: function(a: any, b?: any)
+global out: function(a: any, b?: any)
+global push: function(a?: any, b?: any)
+global pull: function(a?: any, b?: any)
+global mov: function(a: any, b?: any)
+global irq: function(a: any, b?: any)
+global wrap_target: function()
+global wrap: function()
+
 -- ==========================================
 -- 2. SPSC 无锁环形队列 (std/spsc.tl)
 -- ==========================================
@@ -110,7 +131,8 @@ global PICO_GPIO_OUT: integer
 --- **【Pico 硬件】** GPIO 输入模式 (0)
 global PICO_GPIO_IN: integer
 
-global type C_PICO_TYPE = record
+--- **【RP2040】** 树莓派 Pico 底层硬件映射命名空间。
+global type C_PICO = record
     --- 初始化单片机所有的标准输入输出 (UART/USB)。
     stdio_init_all: function()
     --- 初始化指定 GPIO 引脚。
@@ -137,11 +159,11 @@ global type C_PICO_TYPE = record
     multicore_fifo_pop_blocking: function(): integer
     --- 获取当前物理核心的 ID (0 或 1)。
     get_core_num: function(): integer
+
+    l2c_pico_adc_dma_start: function(integer, integer, integer, any)
+    l2c_pico_dma_irq_clear_and_restart: function(integer, integer)
+    l2c_read_adc_buf16: function(integer, integer): integer
 end
-
---- **【RP2040】** 树莓派 Pico 底层硬件映射命名空间。
-global C_PICO: C_PICO_TYPE
-
 
 -- ==========================================
 -- 4. DSP 数字信号处理 (std/dsp.tl)
@@ -151,13 +173,13 @@ global C_PICO: C_PICO_TYPE
 --- @param samples 采样点内存指针 (必须预先去除直流偏置)
 --- @param coeff 预先算好的目标频率系数
 --- @param n 采样点数
-global dsp_goertzel_mag: function(samples: {number}, coeff: number, n: integer): number
+global dsp_goertzel_mag: function(samples_ptr_int: integer, coeff: number, n: integer): number
 
 --- **【0-GC DSP】** Q15 定点数 Goertzel：纯整数极限单周期运算！完美防溢出，无 FPU 单片机的终极杀器。
 --- @param samples 整数型采样点指针
 --- @param coeff_q15 Q15 定点数系数 = round(2 * cos(2*pi*f/fs) * 32768)
 --- @param n 采样点数
-global dsp_goertzel_mag_q15: function(samples: {integer}, coeff_q15: integer, n: integer): integer
+global dsp_goertzel_mag_q15: function(samples_ptr_int: integer, coeff_q15: integer, n: integer): integer
 
 
 -- ==========================================

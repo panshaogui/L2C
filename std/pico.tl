@@ -9,7 +9,7 @@
 -- @l2c_include: pico/time.h
 -- @l2c_include: pico/multicore.h
 
-local type C_PICO = record
+global type C_PICO = record
     stdio_init_all: function()
     gpio_init: function(integer)
     gpio_set_dir: function(integer, integer)
@@ -32,5 +32,5 @@ local type C_PICO = record
 
 end
 
-local PICO_GPIO_OUT: integer = 1
-local PICO_GPIO_IN: integer = 0
+global PICO_GPIO_OUT: integer = 1
+global PICO_GPIO_IN: integer = 0

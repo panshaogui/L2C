@@ -5,7 +5,7 @@
 
 -- @l2c_source: clib/mcu/esp32_cst816.c
 
-local type C_TOUCH = record
+global type C_TOUCH = record
     l2c_touch_init: function(): integer
     l2c_touch_get_pos: function(): integer
 end

@@ -8,10 +8,10 @@
 -- @l2c_include: cjson/cJSON.h
 
 -- 1. 定义不透明指针 (底层映射为 void*)
-local type cJSON_ptr = record end
+global type cJSON_ptr = record end
 
 -- 2. 挂载原生 C 函数 (严格对齐 C 标准头文件)
-local type C_CJSON_TYPE = record
+global type C_CJSON_TYPE = record
     cJSON_Parse: function(any): cJSON_ptr
     cJSON_GetObjectItemCaseSensitive: function(cJSON_ptr, string): cJSON_ptr
     cJSON_IsNumber: function(cJSON_ptr): integer
@@ -21,23 +21,23 @@ local type C_CJSON_TYPE = record
     cJSON_Delete: function(cJSON_ptr)
 end
 
-local C_CJSON: C_CJSON_TYPE
+global C_CJSON: C_CJSON_TYPE
 
 -- ==============================================================================
 -- L2C 极简封装：CJSON 引擎
 -- ==============================================================================
 
 -- 路线 1：给高层应用使用 (解析 Lua 字符串，内部自动物理强转)
-local function CJSON_ParseString(json_str: string): cJSON_ptr
+global function CJSON_ParseString(json_str: string): cJSON_ptr
     return C_CJSON.cJSON_Parse(L2C_Cast(json_str, "cstring"))
 end
 
 -- 路线 2：给高频网关使用 (直接传入 L2C_Ref 的网络缓冲区指针，0-GC 绝对零拷贝)
-local function CJSON_ParseBuffer(buf_ptr: any): cJSON_ptr
+global function CJSON_ParseBuffer(buf_ptr: any): cJSON_ptr
     return C_CJSON.cJSON_Parse(buf_ptr)
 end
 
-local function CJSON_GetNumber(obj: cJSON_ptr, key: string): number
+global function CJSON_GetNumber(obj: cJSON_ptr, key: string): number
     local item = C_CJSON.cJSON_GetObjectItemCaseSensitive(obj, key)
     if item ~= nil and C_CJSON.cJSON_IsNumber(item) ~= 0 then
         return C_CJSON.cJSON_GetNumberValue(item)
@@ -45,7 +45,7 @@ local function CJSON_GetNumber(obj: cJSON_ptr, key: string): number
     return 0.0
 end
 
-local function CJSON_GetString(obj: cJSON_ptr, key: string): string
+global function CJSON_GetString(obj: cJSON_ptr, key: string): string
     local item = C_CJSON.cJSON_GetObjectItemCaseSensitive(obj, key)
     if item ~= nil and C_CJSON.cJSON_IsString(item) ~= 0 then
         return C_CJSON.cJSON_GetStringValue(item)
@@ -53,6 +53,6 @@ local function CJSON_GetString(obj: cJSON_ptr, key: string): string
     return nil
 end
 
-local function CJSON_Free(obj: cJSON_ptr)
+global function CJSON_Free(obj: cJSON_ptr)
     if obj ~= nil then C_CJSON.cJSON_Delete(obj) end
 end
