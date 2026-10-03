@@ -18,7 +18,7 @@ global type C_SQLITE_TYPE = record
     sqlite3_open: function(string, any): integer
     
     -- int sqlite3_exec(sqlite3_t*, const char *sql, int (*callback)(void*,int,char**,char**), void *, char **errmsg);
-    sqlite3_exec: function(sqlite3_t, any, any, any, any): integer
+    sqlite3_exec: function(sqlite3_t, string, any, any, any): integer
     
     sqlite3_close: function(sqlite3_t): integer
 end
@@ -42,12 +42,12 @@ end
 
 -- 针对常量的执行
 global function SQLite_Exec(db: sqlite3_t, sql: string): integer
-    return C_SQLITE.sqlite3_exec(db, L2C_Cast(sql, "cstring"), nil, nil, nil)
+    return C_SQLITE.sqlite3_exec(db, sql, nil, nil, nil)
 end
 
 -- 针对高性能栈内存 (Buffer) 的复用执行
 global function SQLite_ExecBuffer(db: sqlite3_t, sql_buf: any): integer
-    return C_SQLITE.sqlite3_exec(db, L2C_Cast(L2C_Ref(sql_buf), "cstring"), nil, nil, nil)
+    return C_SQLITE.sqlite3_exec(db, L2C_Ref(sql_buf) as string, nil, nil, nil)
 end
 
 global function SQLite_Close(db: sqlite3_t): integer

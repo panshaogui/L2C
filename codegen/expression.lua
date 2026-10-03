@@ -32,6 +32,17 @@ end
 
 function M:gen_op(node)
     local op_sym = node.op.op
+
+    --【核心修复：截胡 Teal 的 'as' 运算符，瞬间发动泛型降维打击！】
+    if op_sym == "as" then
+        -- e1 是左边的表达式 (被强转的指针)
+        local exp_str = self:gen(node.e1)
+        -- e2 是右边的类型节点，直接喂给咱们大一统的 LIR 引擎！
+        local type_ir = parse_type_to_ir(node.e2)
+        -- 极其暴力的 C 语言物理降维：(@Type)(exp)
+        return string.format("(@%s)(%s)", type_ir:to_nelua(), exp_str)
+    end
+
     --  [语法兼容]：强制抹平 Teal 和 Nelua 对“不等于”符号的解析差异
     if op_sym == "!=" then op_sym = "~=" end
 

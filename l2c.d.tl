@@ -198,7 +198,7 @@ global freertos_delay_ms: function(ms: integer)
 global freertos_start: function()
 
 --- **【SMP 点火】** 全平台一致 API：发射业务函数到物理 Core 1 (PC 映射为 Pthread，MCU 映射为物理核)。
-global Multicore_Launch: function(task_func: any)
+global Multicore_Launch: function(task_func: function())
 
 
 -- ==========================================

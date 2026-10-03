@@ -7,9 +7,6 @@ local type Order = record
     _new: function(integer): Order 
 end
 
--- 高层打个桩，骗过 Teal 的语法检查，底层会被劫持
-local function L2C_Tick_Reset() end
-
 local function test_tick(): integer
     -- 我们只传了 price，没有传 qty 和 is_buy！
     local o: Order = Order._new(99) 
