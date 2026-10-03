@@ -34,7 +34,6 @@ __MACOSX/
 
 # Vscode
 .vscode/
-tlconfig.lua
 l2c/
 *.pio
 *.pio.h
