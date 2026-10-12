@@ -13,7 +13,7 @@ local function get_current_ns(): integer
 end
 
 -- 2. 验证 C_ZMQ 命名空间
-print("⚡ L2C 双核 FFI 引擎启动...")
+print(" L2C 双核 FFI 引擎启动...")
 local ctx = C_ZMQ.zmq_ctx_new()
 local subscriber = C_ZMQ.zmq_socket(ctx, 2)
 local rc = C_ZMQ.zmq_connect(subscriber, "tcp://127.0.0.1:5555")

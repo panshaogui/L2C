@@ -8,95 +8,199 @@
 #include <unistd.h>
 #include <net/if.h>
 #include <sys/resource.h>
+#include <poll.h>
 #include <bpf/bpf.h>
+#include <bpf/libbpf.h>
 #include <xdp/xsk.h>
 #include <linux/if_link.h>
-#include <poll.h> // 新增：引入 poll 唤醒机制
 
 #define NUM_FRAMES 4096
 #define FRAME_SIZE XSK_UMEM__DEFAULT_FRAME_SIZE
 #define BATCH_SIZE 64
 
-// 暴露给 L2C 的核心入口：传入网卡名和 Lua 回调函数指针
-void xdp_start_poll(const char *ifname, void (*lua_callback)(void* packet_ptr, int len)) {
+static struct bpf_object *g_bpf_obj = NULL;
+static int g_blacklist_map_fd = -1;
+static int g_xsks_map_fd = -1;
+static int g_ifindex = -1;
+static struct bpf_link *g_bpf_link = NULL;
+
+// 物理网卡卸载与安全清理钩子
+static void cleanup_bpf(void) {
+    // 防御性清理：必须使用 !libbpf_get_error 校验指针有效性，防止销毁野指针引发段错误
+    if (g_bpf_link && !libbpf_get_error(g_bpf_link)) {
+        bpf_link__destroy(g_bpf_link);
+        g_bpf_link = NULL;
+    }
+    if (g_bpf_obj && !libbpf_get_error(g_bpf_obj)) {
+        bpf_object__close(g_bpf_obj);
+        g_bpf_obj = NULL;
+    }
+    printf("\n [XDP-CLEANUP] 现代内核防御程序已安全释放。\n");
+}
+
+void l2c_net_block_ip(uint32_t ip_addr) {
+    if (g_blacklist_map_fd < 0) return;
+    uint8_t val = 1;
+    bpf_map_update_elem(g_blacklist_map_fd, &ip_addr, &val, BPF_ANY);
+}
+
+void xdp_start_poll(const char *ifname, void (*lua_callback)(void* packet_ptr, int64_t len)) {
     struct rlimit r = {RLIM_INFINITY, RLIM_INFINITY};
-    if (setrlimit(RLIMIT_MEMLOCK, &r)) { perror("setrlimit 失败"); return; }
+    setrlimit(RLIMIT_MEMLOCK, &r);
 
-    void *umem_area = NULL;
-    if (posix_memalign(&umem_area, getpagesize(), NUM_FRAMES * FRAME_SIZE)) { perror("posix_memalign 失败"); return; }
+    g_ifindex = if_nametoindex(ifname);
+    if (!g_ifindex) {
+        perror("无效的网卡名称");
+        return;
+    }
 
-    struct xsk_ring_prod fill_ring;
-    struct xsk_ring_cons comp_ring;
-    struct xsk_umem *umem;
-    struct xsk_umem_config umem_cfg = { .fill_size = 2048, .comp_size = 2048, .frame_size = FRAME_SIZE, .frame_headroom = XSK_UMEM__DEFAULT_FRAME_HEADROOM };
+    printf(" [XDP-INIT] 正在加载内核字节码 bpf/kernel_killer.o ...\n");
+    g_bpf_obj = bpf_object__open_file("bpf/kernel_killer.o", NULL);
+    if (libbpf_get_error(g_bpf_obj)) {
+        perror("加载 BPF 打开文件失败");
+        g_bpf_obj = NULL;
+        return;
+    }
 
-    if (xsk_umem__create(&umem, umem_area, NUM_FRAMES * FRAME_SIZE, &fill_ring, &comp_ring, &umem_cfg)) { return; }
+    if (bpf_object__load(g_bpf_obj)) {
+        perror("BPF 加载到内核失败");
+        bpf_object__close(g_bpf_obj);
+        g_bpf_obj = NULL;
+        return;
+    }
 
-    // 刚刚被我不小心切掉的 4 行生死攸关的声明，全在这里了！
-    struct xsk_ring_cons rx_ring;
-    struct xsk_ring_prod tx_ring;
-    struct xsk_socket *xsk;
-    // [物理降维：强制 SKB 兼容模式]
-    // 既然普通网卡驱动不支持 Native XDP，我们就强行呼叫 Linux 内核的 Generic XDP (SKB 模式)
-    // 配合 XDP_COPY，强迫内核为我们做一次内存接力，保证在任何普通网卡 (enp2s0) 上绝对能跑通！
+    struct bpf_program *prog = bpf_object__find_program_by_name(g_bpf_obj, "xdp_killer_prog");
+    if (!prog) {
+        fprintf(stderr, "找不到 xdp_killer_prog 函数，请检查 kernel_killer.c 中的 SEC 定义！\n");
+        bpf_object__close(g_bpf_obj);
+        g_bpf_obj = NULL;
+        return;
+    }
 
-    /*
-    struct xsk_socket_config xsk_cfg = { 
-        .rx_size = 2048, 
-        .tx_size = 2048, 
-        .xdp_flags = XDP_FLAGS_SKB_MODE,             // 强制走内核通用层
-        .bind_flags = XDP_USE_NEED_WAKEUP | XDP_COPY // 强制兼容拷贝模式
-    };
+    /* 
+     * 【核心修复】：删除/注释掉下面的手动 attach! 
+     * 避免与后续 xsk_socket__create 产生 EBUSY (-16) 冲突。
+     
+    g_bpf_link = bpf_program__attach_xdp(prog, g_ifindex);
+    if (libbpf_get_error(g_bpf_link)) {
+        fprintf(stderr, " [致命错误] 挂载 XDP 到网卡 %s 失败！请确认网卡状态或以 sudo 运行！\n", ifname);
+        g_bpf_link = NULL; // 清空错误句柄，防止 cleanup_bpf 误销毁
+        bpf_object__close(g_bpf_obj);
+        g_bpf_obj = NULL;
+        return;
+    }
+    atexit(cleanup_bpf);
 
     */
 
-    struct xsk_socket_config xsk_cfg = { .rx_size = 2048, .tx_size = 2048, .xdp_flags = 0, .bind_flags = XDP_USE_NEED_WAKEUP };
-
-    if (xsk_socket__create(&xsk, ifname, 0, umem, &rx_ring, &tx_ring, &xsk_cfg)) { perror("xsk_socket__create 失败"); return; }
-    
-    // 预填充 fill_ring，告诉网卡：这些内存地址你可以用来写数据！
-    // [致命 Bug 修复]：严格对齐 umem_cfg.fill_size 的 2048 容量！
-    uint32_t idx_fill;
-    uint32_t fill_qty = 2048; 
-    if (xsk_ring_prod__reserve(&fill_ring, fill_qty, &idx_fill) != fill_qty) {
-        fprintf(stderr, " 严重错误：无法将 UMEM 内存块压入 Fill Ring 队列！内核拒绝了请求！\n");
+    g_blacklist_map_fd = bpf_object__find_map_fd_by_name(g_bpf_obj, "blacklist_map");
+    g_xsks_map_fd = bpf_object__find_map_fd_by_name(g_bpf_obj, "xsks_map");
+    if (g_blacklist_map_fd < 0 || g_xsks_map_fd < 0) {
+        fprintf(stderr, "找不到 BPF Map (blacklist_map 或 xsks_map)\n");
         return;
     }
-    for (uint32_t i = 0; i < fill_qty; i++) {
-        *xsk_ring_prod__fill_addr(&fill_ring, idx_fill++) = i * FRAME_SIZE;
+
+    // ========================================================
+    // 2. 建立旁路通道 (AF_XDP UMEM)
+    // ========================================================
+    void *umem_area = NULL;
+    if (posix_memalign(&umem_area, getpagesize(), NUM_FRAMES * FRAME_SIZE)) {
+        perror("UMEM 内存分配失败");
+        return; 
     }
-    xsk_ring_prod__submit(&fill_ring, fill_qty);
 
-    printf(" [XDP C-Wrapper] AF_XDP 极速轮询引擎点火！物理 DMA 管道已接通...\n");
+    struct xsk_ring_prod fill_ring;
+    struct xsk_ring_cons comp_ring, rx_ring;
+    struct xsk_ring_prod tx_ring;
+    struct xsk_umem *umem = NULL;
+    struct xsk_umem_config umem_cfg = {
+        .fill_size = 2048, 
+        .comp_size = 2048, 
+        .frame_size = FRAME_SIZE, 
+        .frame_headroom = XSK_UMEM__DEFAULT_FRAME_HEADROOM
+    };
 
-    // 新增：配置 pollfd 用于唤醒内核
-    struct pollfd fds[1];
-    fds[0].fd = xsk_socket__fd(xsk);
-    fds[0].events = POLLIN;
+    int ret = xsk_umem__create(&umem, umem_area, NUM_FRAMES * FRAME_SIZE, &fill_ring, &comp_ring, &umem_cfg);
+    if (ret < 0) {
+        fprintf(stderr, "xsk_umem__create 失败，错误码: %d\n", ret);
+        return;
+    }
 
-    // ⚡ 死循环极致轮询 (Poll)
+    struct xsk_socket *xsk = NULL;
+    // 【关键修复】：指定 XDP_FLAGS_SKB_MODE，确保适配 veth 虚拟网卡；使用 XDP_ZEROCOPY 或默认模式
+    struct xsk_socket_config xsk_cfg = { 
+        .rx_size = 2048, 
+        .tx_size = 2048, 
+        .xdp_flags = XDP_FLAGS_SKB_MODE, // veth 测试时开启 SKB 模式，避免挂载驱动冲突
+        .bind_flags = XDP_USE_NEED_WAKEUP 
+    };
+
+    ret = xsk_socket__create(&xsk, ifname, 0, umem, &rx_ring, &tx_ring, &xsk_cfg);
+    if (ret < 0 || !xsk) {
+        fprintf(stderr, "xsk_socket__create 绑定网卡 %s 失败，错误码: %d\n", ifname, ret);
+        return;
+    }
+
+    // 将 Socket 句柄更新至 BPF xsks_map
+    int xsk_fd = xsk_socket__fd(xsk);
+    if (xsk_fd < 0) {
+        fprintf(stderr, "获取 xsk_fd 句柄无效！\n");
+        return;
+    }
+
+    int key = 0; // rx_queue_index 默认为 0
+    if (bpf_map_update_elem(g_xsks_map_fd, &key, &xsk_fd, BPF_ANY) < 0) {
+        perror("更新 xsks_map 失败");
+        return;
+    }
+
+    uint32_t idx_fill;
+    uint32_t fill_qty = 2048; 
+    if (xsk_ring_prod__reserve(&fill_ring, fill_qty, &idx_fill) == fill_qty) {
+        for (uint32_t i = 0; i < fill_qty; i++) {
+            *xsk_ring_prod__fill_addr(&fill_ring, idx_fill++) = i * FRAME_SIZE;
+        }
+        xsk_ring_prod__submit(&fill_ring, fill_qty);
+    }
+
+    printf(" [XDP-INIT] AF_XDP 极速嗅探引擎点火完毕 (监听网卡: %s)！\n", ifname);
+
+    // ========================================================
+    // 3. 进入极速轮询监听
+    // ========================================================
+    struct pollfd fds[1] = {{.fd = xsk_fd, .events = POLLIN}};
+
     while (1) {
-        // 新增：当内核需要唤醒时，通过 poll 踢一脚内核 (防止 veth 饿死)
         if (xsk_ring_prod__needs_wakeup(&fill_ring)) {
             poll(fds, 1, 10); 
         }
 
         uint32_t idx_rx;
         uint32_t rcvd = xsk_ring_cons__peek(&rx_ring, BATCH_SIZE, &idx_rx);
-        if (!rcvd) continue; 
+        if (!rcvd) {
+            // 如果没有收到包，主动唤醒/等待内核
+            if (xsk_ring_prod__needs_wakeup(&fill_ring)) {
+                recvfrom(xsk_fd, NULL, 0, MSG_DONTWAIT, NULL, NULL); // 强制唤醒内核收包
+            }
+            usleep(100); // 避免 CPU 100% 空转，测试期可加微小休眠
+            continue;
+        }
 
+        // 2. 收到包后的处理 ...
+        // 【调试加这行】
+        // printf("[AF_XDP C-Wrapper] 捕获到极速数据包，数量: %d\n", rcvd);
+        
         uint32_t rx_start = idx_rx;
         for (uint32_t i = 0; i < rcvd; i++) {
             const struct xdp_desc *desc = xsk_ring_cons__rx_desc(&rx_ring, idx_rx++);
-            // 物理偏移计算：原始基址 + 网卡偏移量
             void *pkt_ptr = (void *)((char *)umem_area + desc->addr);
-            
-            // 【高潮时刻】调用 L2C 回调，0 纳秒延迟解构数据包！
-            lua_callback(pkt_ptr, desc->len);
+            if (lua_callback) {
+                lua_callback(pkt_ptr, (int64_t)(desc->len));
+            }
         }
         xsk_ring_cons__release(&rx_ring, rcvd);
 
-        // 回收站机制：把刚刚用完的内存地址塞回 fill_ring 循环利用，绝对 0 分配！
+        // 3. 【核心】：收完包后，必须把这些内存帧重新还给 Fill Ring，供内核接收下一个包！
         uint32_t idx_fq;
         if (xsk_ring_prod__reserve(&fill_ring, rcvd, &idx_fq) == rcvd) {
             for (uint32_t i = 0; i < rcvd; i++) {
