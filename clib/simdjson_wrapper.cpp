@@ -30,7 +30,7 @@ extern "C" {
         double val = 0.0;
         auto field = doc->root[key];
         if (field.error() == simdjson::SUCCESS) {
-            // 🔥 [严谨对齐]：接住并处理 simdjson 强制要求返回的 error_code，消灭 warning
+            // 接住并处理 simdjson 强制要求返回的 error_code，消灭 warning
             auto err = field.get_double().get(val);
             if (err) { val = 0.0; }
         }

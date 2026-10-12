@@ -14,8 +14,8 @@ extern "C" {
 #endif
 
 // 暴露给 L2C 的核心入口
-void xdp_start_poll(const char *ifname, void (*lua_callback)(void* packet_ptr, int len));
-
+void xdp_start_poll(const char *ifname, void (*lua_callback)(void* packet_ptr, int64_t len));
+void l2c_net_block_ip(uint32_t ip_addr);
 #ifdef __cplusplus
 }
 #endif

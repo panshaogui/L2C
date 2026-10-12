@@ -19,6 +19,10 @@ global type C_NET_TYPE = record
     l2c_net_get_udp_payload_len: function(any): integer
     -- 映射汇编探针
     l2c_rdtsc: function(): integer
+    l2c_net_get_tcp_dest: function(any): integer
+    l2c_net_get_tcp_header_len: function(any): integer
+    l2c_net_get_src_ip: function(any): integer
+    l2c_net_block_ip: function(integer)
 end
 
 global C_NET: C_NET_TYPE
