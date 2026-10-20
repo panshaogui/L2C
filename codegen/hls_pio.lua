@@ -27,6 +27,9 @@ function HLS.compile(func_node, engine)
             -- 利用正则剥离 Teal 函数调用的括号，降维成 PIO 汇编语法
             local fn, args_str = nelua_stmt:match("^([%w_]+)%((.*)%)$")
             
+            -- [HLS 修复] 剥离为了绕过 Teal 关键字而加的下划线马甲
+            if fn == "in_" then fn = "in" end
+            
             if fn then
                 -- 擦除 Teal 字符串字面量的引号（比如 jmp("loop") -> jmp loop）
                 args_str = args_str:gsub('"', ''):gsub("'", "")

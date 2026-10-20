@@ -39,7 +39,7 @@ function M.execute(tmp_file, output_bin, deps)
                     c_src = inject_code .. "\n" .. c_src 
                     print(" [L2C 物理注射] 已将 C 源码融进主固件: " .. src_file)
                 else
-                    print(" ⚠️ [L2C 警告] 找不到请求注入的 C 源码: " .. src_file)
+                    print(" [L2C 警告] 找不到请求注入的 C 源码: " .. src_file)
                 end
             end
         end
@@ -53,17 +53,6 @@ function M.execute(tmp_file, output_bin, deps)
         print(" [L2C] 提取成功！固件源码: ./" .. out_c_file)
     else
         print(" [L2C 熔断] Pico 内存 C 提取失败！")
-    end
-
-    -- 主干成功后，在目标目录里处理硬件状态机
-    local pio_file = io.open(pio_path, "r")
-    if pio_file then
-        pio_file:close()
-        print(" [L2C PIO Forge] 发现硬件状态机文件，正在唤醒 pioasm 综合...")
-        if os.execute(string.format("pioasm %s %s", pio_path, pio_h_path)) ~= 0 then
-            print(" [L2C 熔断] pioasm 综合失败！")
-            os.exit(1)
-        end
     end
 end
 return M

@@ -43,8 +43,22 @@ function M.bundle(input_file)
         global function L2C_ReadArray(arr_ptr: integer, idx: integer): integer end
         global function L2C_WriteArray(arr_ptr: integer, idx: integer, val: integer) end
 
+        -- [L2C HLS RTL 物理位宽别名]
+        global type bit = integer
+        global type uint3 = integer
+        global type uint8 = integer
+        global type uint10 = integer
+
         -- [L2C HLS RTL Intrinsics 硬件寄存器签证]
-        global function HDL_Reg(init_val: integer): integer end
+        global function HDL_Reg(init_val: integer, bit_width?: integer): integer end
+
+        -- [L2C HLS BRAM 物理内存推断签证 (专供 FPGA)]
+        global function HDL_BRAM(width: integer, depth: integer): any end
+        global function HDL_BRAM_Write(ram: any, addr: integer, data: integer) end
+        global function HDL_BRAM_Read(ram: any, addr: integer): integer end
+        global function HDL_Instance(mod_name: string, inst_name: string, port_map: string) end
+        global function HDL_Wire(width: integer): integer end
+        global function HDL_Clock_Domain(clk: any, rst_n?: any): boolean end
 
         -- [L2C HLS PIO Intrinsics 硬件状态机魔法签证]
         global function set(a: any, b?: any) end

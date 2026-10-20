@@ -3,7 +3,6 @@
 // L2C: Transpile Typed Lua into 0-GC Native C for HFT and Embedded Systems.
 // ==============================================================================
 
-#pragma once
 #include "hardware/pio.h"
 #include "l2c_hardware.pio.h" // 引入您刚才通过 pioasm 生成的头文件
 

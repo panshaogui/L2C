@@ -16,9 +16,3 @@ global function L2C_HDL_PriceMask(price: integer, threshold: integer, ctrl: inte
     local result = mask_a ~ mask_b
     return result
 end
-
--- 物理域：随便留个入口防止报错
-global function main(): integer
-    print("Verilog HLS Transpilation test...")
-    return 0
-end

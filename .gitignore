@@ -18,7 +18,8 @@ clib/l2c_bundle.h
 pico/build/
 pico/*.pio
 pico/*.pio.h
-pico/*.v
+pico/l2c_hardware.v
+pico/*.json
 
 esp32/build/
 esp32/managed_components/
@@ -37,6 +38,6 @@ __MACOSX/
 l2c/
 *.pio
 *.pio.h
-*.v
+l2c_hardware.v
 main
 l2c_profile.txt
