@@ -14,9 +14,3 @@ local function L2C_HDL_SEQ_Counter(step: integer): integer
     -- 将寄存器的实时引脚状态连到输出总线
     return count
 end
-
--- 物理域：随便留个入口防止报错
-global function main(): integer
-    print("Verilog Sequential HLS test...")
-    return 0
-end

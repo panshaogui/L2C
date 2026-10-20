@@ -68,8 +68,46 @@ global L2C_WriteArray: function(arr_ptr: integer, idx: integer, val: integer)
 
 global L2C_RecordArray: function(tname: string, size: integer): any
 
+-- [L2C HLS RTL 物理位宽别名]
+global type bit = integer
+global type uint8 = integer
+global type uint10 = integer
+global type uint3 = integer   -- HDMI 差分对 (3个通道)
+
 -- [L2C HLS RTL Intrinsics 硬件寄存器签证]
-global HDL_Reg: function(init_val: integer): integer
+global HDL_Reg: function(init_val: integer, bit_width?: integer): integer
+
+--- **【HLS BRAM 推断】** 声明并推断 FPGA 内部的极速双口 Block RAM 物理存储块。
+--- @param width 存储位宽 (例如 8 表示 8-bit 数据线)。
+--- @param depth 存储深度 (例如 1024，表示 1024 个存储单元)。
+--- @return 返回该 BRAM 的虚无句柄 (仅供 L2C HLS 拦截并生成 Verilog，不消耗 CPU 资源)。
+global HDL_BRAM: function(width: integer, depth: integer): any
+
+--- **【HLS BRAM 写入】** 综合为 FPGA 的时序逻辑 `always @(posedge clk)`，在指定地址写入数据。
+--- @param ram 目标 BRAM 句柄。
+--- @param addr 写入的物理偏移地址。
+--- @param data 将要写入的并行数据。
+global HDL_BRAM_Write: function(ram: any, addr: integer, data: integer)
+
+--- **【HLS BRAM 读取】** 综合为 FPGA 的物理连线逻辑 `assign out = ram[addr]`，实时透传对应地址的数据。
+--- @param ram 目标 BRAM 句柄。
+--- @param addr 读取的物理偏移地址。
+--- @return 返回绝对零延迟的并行数据线状态。
+global HDL_BRAM_Read: function(ram: any, addr: integer): integer
+
+--- **【HLS 黑盒挂载】** 瞬间在硅片上实例化外部编写的 Verilog IP 核心！
+--- @param mod_name 模块名 (如 "hdmi_tx")
+--- @param inst_name 实例名 (如 "u_hdmi")
+--- @param port_map 物理连线映射表 (如 ".clk(clk), .rst(rst)")
+global HDL_Instance: function(mod_name: string, inst_name: string, port_map: string)
+
+--- **【HLS 物理线推断】** 推断一束无状态的纯物理连线 (wire)，用于连接黑盒。
+global HDL_Wire: function(width: integer): integer
+
+--- **【HLS 多时钟域边界】** 魔法边界。利用 if 块构建绝对物理隔离的 FPGA always 时序逻辑块。
+--- @param clk 驱动该时钟域的物理时钟信号。
+--- @param rst_n 可选的异步复位信号。
+global HDL_Clock_Domain: function(clk: any, rst_n?: any): boolean
 
 --- **【HLS PIO】** 硬件状态机汇编签证
 global set: function(a: any, b?: any)

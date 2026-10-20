@@ -1,0 +1,47 @@
+// ==========================================
+// 1. 系统时钟 (3.3V 标准 - 27MHz 晶振引脚)
+// ==========================================
+IO_LOC "clk" 52;
+IO_PORT "clk" IO_TYPE=LVCMOS33 PULL_MODE=UP;
+
+// ==========================================
+// 2. 复位按键 (1.8V 标准 - 对应硬件 Bank 3 的物理按键)
+// ==========================================
+IO_LOC "rst_n" 3;
+IO_PORT "rst_n" IO_TYPE=LVCMOS18 PULL_MODE=UP;
+
+// ==========================================
+// 3. HDMI 模拟差分引脚 (ELVDS 专配：LVCMOS33D)
+// ==========================================
+IO_LOC "tmds_clk_p" 69,68;
+IO_PORT "tmds_clk_p" IO_TYPE=LVCMOS33D PULL_MODE=NONE DRIVE=8;
+
+IO_LOC "tmds_d_p[0]" 71,70;
+IO_PORT "tmds_d_p[0]" IO_TYPE=LVCMOS33D PULL_MODE=NONE DRIVE=8;
+
+IO_LOC "tmds_d_p[1]" 73,72;
+IO_PORT "tmds_d_p[1]" IO_TYPE=LVCMOS33D PULL_MODE=NONE DRIVE=8;
+
+IO_LOC "tmds_d_p[2]" 75,74;
+IO_PORT "tmds_d_p[2]" IO_TYPE=LVCMOS33D PULL_MODE=NONE DRIVE=8;
+
+// ==========================================
+// 4. 六维物理诊断探针灯 (1.8V 标准)
+// ==========================================
+IO_LOC "led[0]" 10;
+IO_PORT "led[0]" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=8;
+
+IO_LOC "led[1]" 11;
+IO_PORT "led[1]" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=8;
+
+IO_LOC "led[2]" 13;
+IO_PORT "led[2]" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=8;
+
+IO_LOC "led[3]" 14;
+IO_PORT "led[3]" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=8;
+
+IO_LOC "led[4]" 15;
+IO_PORT "led[4]" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=8;
+
+IO_LOC "led[5]" 16;
+IO_PORT "led[5]" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=8;

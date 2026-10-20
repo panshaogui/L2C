@@ -2,7 +2,7 @@
 -- examples/04_test_pio.tl: L2C PIO HLS 硬件综合器端到端测试
 -- ==============================================
 
--- @l2c_include: clib/pio_helpers.h
+-- @l2c_source: clib/pio_helpers.h
 require "std.pico"
 
 -- 1. 思想域：声明并编写硬件状态机 (将被 HLS 拦截，转化为 blink.pio)

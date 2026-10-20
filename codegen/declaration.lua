@@ -120,7 +120,7 @@ function M:_gen_type_internal(node, scope_kwd)
     end
 
     -- 终极真理解法：遍历 enumset 哈希表提取 Enum
-    if def.typename == "enum" then
+    if def and def.typename == "enum" then
         local out = {}
         -- 【动态 Scope 注入】
         table.insert(out, string.format("%s %s = @enum {", scope_kwd, name))
@@ -319,6 +319,24 @@ end
 --  [架构拓荒]：打通底层全局函数 (global function) 声明，用于导出 C 核心入口
 function M:gen_global_function(node)
     local name = node.name and node.name.tk or "anon"
+
+    -- [HLS 拦截网] 防止全局 HLS 块泄漏进入 C 宇宙，引发 Nelua 编译崩溃
+    if name:match("^L2C_PIO_") then
+        local hls = require("codegen.hls_pio")
+        self.pio_registry = self.pio_registry or {}
+        local pio_name = name:gsub("^L2C_PIO_", "")
+        self.pio_registry[pio_name] = hls.compile(node, self)
+        return "-- [L2C HLS] PIO State Machine Synthesized (Global): " .. pio_name
+    end
+    
+    if name:match("^L2C_HDL_") then
+        local hls_v = require("codegen.hls_verilog")
+        self.verilog_registry = self.verilog_registry or {}
+        local mod_name = name:gsub("^L2C_HDL_", "")
+        self.verilog_registry[mod_name] = hls_v.compile(node, self)
+        return "-- [L2C HLS] Verilog RTL Synthesized (Global): " .. mod_name
+    end
+
     local args_list = {}
     if node.args and node.args[1] then
         for _, arg in ipairs(node.args) do
